@@ -40,8 +40,8 @@ def generate_synthetic_entities(
         existing_entity_names=existing_entity_names,
     )
 
-    # Find main topic entities to connect synthetic people to
-    topic_entity_uuids = _find_topic_entities(graph_id, storage)
+    # Find or create a single topic node to connect synthetic people to
+    topic_uuid = _find_or_create_topic_node(graph_id, storage, simulation_requirement)
 
     entities = []
     for sketch in sketches:
@@ -59,7 +59,7 @@ def generate_synthetic_entities(
             name=name,
             summary=summary,
             attributes=attributes,
-            topic_entity_uuids=topic_entity_uuids,
+            topic_entity_uuids=[topic_uuid] if topic_uuid else [],
         )
 
         entity = EntityNode(
@@ -77,31 +77,67 @@ def generate_synthetic_entities(
     return entities
 
 
-def _find_topic_entities(graph_id: str, storage: 'GraphStorage') -> List[str]:
-    """Find the main topic entities (most connected) to link synthetic people to."""
+def _find_or_create_topic_node(
+    graph_id: str,
+    storage: 'GraphStorage',
+    simulation_requirement: str,
+) -> Optional[str]:
+    """
+    Find an existing topic entity in the graph, or create a :Topic node.
+    Returns the UUID of the topic node to connect synthetic people to.
+    """
+    # Extract a short topic name from the simulation requirement
+    topic_name = simulation_requirement.split(".")[0].strip()[:80]
+
     try:
         info = storage.get_graph_data(graph_id)
         nodes = info.get("nodes", [])
-        edges = info.get("edges", [])
 
-        # Count connections per node
-        connection_count: Dict[str, int] = {}
+        # Try to find an existing entity whose name closely matches the topic
+        topic_lower = topic_name.lower()
         for node in nodes:
-            connection_count[node["uuid"]] = 0
-        for edge in edges:
-            src = edge.get("source_node_uuid", "")
-            tgt = edge.get("target_node_uuid", "")
-            if src in connection_count:
-                connection_count[src] += 1
-            if tgt in connection_count:
-                connection_count[tgt] += 1
+            node_name = node.get("name", "").lower()
+            # Check if topic keywords appear in node name
+            if any(word in node_name for word in topic_lower.split() if len(word) > 3):
+                logger.info(f"Found existing topic entity: {node['name']} ({node['uuid']})")
+                return node["uuid"]
 
-        # Return top 3 most connected entities
-        sorted_nodes = sorted(connection_count.items(), key=lambda x: x[1], reverse=True)
-        return [uuid for uuid, _ in sorted_nodes[:3]]
+        # No matching entity found — create a dedicated Topic node
+        topic_uuid = f"topic-{uuid.uuid4()}"
+        now = datetime.now(timezone.utc).isoformat()
+
+        def _create_topic(tx):
+            tx.run(
+                """
+                CREATE (n:Entity:Topic {
+                    uuid: $uuid,
+                    graph_id: $graph_id,
+                    name: $name,
+                    name_lower: $name_lower,
+                    summary: $summary,
+                    attributes_json: $attributes_json,
+                    embedding: [],
+                    created_at: $created_at
+                })
+                """,
+                uuid=topic_uuid,
+                graph_id=graph_id,
+                name=topic_name,
+                name_lower=topic_name.lower(),
+                summary=f"Central topic of this simulation: {simulation_requirement}",
+                attributes_json=json.dumps({"topic": True}),
+                created_at=now,
+            )
+
+        with storage._session() as session:
+            storage._call_with_retry(session.execute_write, _create_topic)
+
+        logger.info(f"Created topic node: {topic_name} ({topic_uuid})")
+        return topic_uuid
+
     except Exception as e:
-        logger.warning(f"Failed to find topic entities: {e}")
-        return []
+        logger.warning(f"Failed to find/create topic node: {e}")
+        return None
 
 
 def _write_synthetic_to_neo4j(
