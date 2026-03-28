@@ -637,26 +637,28 @@ class SimulationRunner:
                                         state.completed_at = datetime.now().isoformat()
                                         logger.info(f"All platform simulations completed: {state.simulation_id}")
                                 
-                                # Update round information (from round_end event)
+                                # Track simulated time from round_start (has simulated_hour)
+                                elif event_type == "round_start":
+                                    simulated_hours = action_data.get("simulated_hour", 0)
+                                    if platform == "twitter":
+                                        state.twitter_simulated_hours = simulated_hours
+                                    elif platform == "reddit":
+                                        state.reddit_simulated_hours = simulated_hours
+                                    state.simulated_hours = max(state.twitter_simulated_hours, state.reddit_simulated_hours)
+
+                                # Track round completion from round_end
                                 elif event_type == "round_end":
                                     round_num = action_data.get("round", 0)
-                                    simulated_hours = action_data.get("simulated_hours", 0)
-                                    
-                                    # Update per-platform independent rounds and time
+
                                     if platform == "twitter":
                                         if round_num > state.twitter_current_round:
                                             state.twitter_current_round = round_num
-                                        state.twitter_simulated_hours = simulated_hours
                                     elif platform == "reddit":
                                         if round_num > state.reddit_current_round:
                                             state.reddit_current_round = round_num
-                                        state.reddit_simulated_hours = simulated_hours
-                                    
-                                    # Overall rounds take maximum of both platforms
+
                                     if round_num > state.current_round:
                                         state.current_round = round_num
-                                    # Overall time takes maximum of both platforms
-                                    state.simulated_hours = max(state.twitter_simulated_hours, state.reddit_simulated_hours)
                                 
                                 continue
                             
