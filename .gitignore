@@ -1,0 +1,13 @@
+mirofish/
+
+# Python
+__pycache__/
+*.pyc
+*.egg-info/
+.venv/
+
+# Agent data
+agent/data/
+
+# Environment
+.env
