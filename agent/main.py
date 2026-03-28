@@ -47,29 +47,35 @@ def setup_openai_client():
 
 
 def build_agents():
+    # Create orchestrator first (referenced by sub-agents for handoff-back)
+    main_agent = Agent(
+        name="orchestrator",
+        instructions=MAIN_SYSTEM_PROMPT,
+        tools=polymarket_discovery_tools + paper_trading_read_tools,
+        handoffs=[],  # filled below
+        model=MODEL,
+    )
+
     researcher_agent = Agent(
         name="researcher",
-        instructions=RESEARCHER_PROMPT,
+        instructions=RESEARCHER_PROMPT + "\n\nAfter completing your research brief, ALWAYS transfer back to the orchestrator so it can continue the trading workflow.",
         tools=[WebSearchTool()],
+        handoffs=[main_agent],
         model=MODEL,
         handoff_description="Web research specialist. Transfer to this agent to research a prediction market topic — gathers news, analysis, and sentiment.",
     )
 
     trader_agent = Agent(
         name="trader",
-        instructions=TRADER_PROMPT,
+        instructions=TRADER_PROMPT + "\n\nAfter executing a trade (or deciding not to), ALWAYS transfer back to the orchestrator so it can continue with the next market or wrap up.",
         tools=polymarket_trading_tools + paper_trading_exec_tools,
+        handoffs=[main_agent],
         model=MODEL,
         handoff_description="Trading execution specialist. Transfer to this agent with market details and probability estimate to analyze orderbooks and execute paper trades.",
     )
 
-    main_agent = Agent(
-        name="orchestrator",
-        instructions=MAIN_SYSTEM_PROMPT,
-        tools=polymarket_discovery_tools + paper_trading_read_tools,
-        handoffs=[researcher_agent, trader_agent],
-        model=MODEL,
-    )
+    # Wire up orchestrator handoffs
+    main_agent.handoffs = [researcher_agent, trader_agent]
 
     return main_agent
 

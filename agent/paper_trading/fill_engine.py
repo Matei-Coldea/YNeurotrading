@@ -12,6 +12,9 @@ def simulate_buy(asks: list[dict], amount_usd: float, midpoint: float | None = N
     Returns:
         FillResult with shares acquired, average price, total cost, and slippage.
     """
+    # Sort asks ascending by price (cheapest first) — CLOB API may return them in any order
+    asks = sorted(asks, key=lambda x: float(x["price"]))
+
     remaining_usd = amount_usd
     total_shares = 0.0
     total_spent = 0.0
@@ -57,6 +60,9 @@ def simulate_sell(bids: list[dict], shares: float, midpoint: float | None = None
     Returns:
         FillResult with shares sold, average price, total proceeds, and slippage.
     """
+    # Sort bids descending by price (highest first) — CLOB API may return them in any order
+    bids = sorted(bids, key=lambda x: float(x["price"]), reverse=True)
+
     remaining_shares = shares
     total_proceeds = 0.0
     total_sold = 0.0
