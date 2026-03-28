@@ -236,6 +236,7 @@ class SimulationManager:
         progress_callback: Optional[callable] = None,
         parallel_profile_count: int = 3,
         storage: 'GraphStorage' = None,
+        synthetic_people_count: int = 0,
     ) -> SimulationState:
         """
         Prepare simulation environment (fully automated)
@@ -286,6 +287,27 @@ class SimulationManager:
                 enrich_with_edges=True
             )
             
+            # Inject synthetic regular-people entities if requested
+            if synthetic_people_count > 0:
+                if progress_callback:
+                    progress_callback("reading", 70, f"Generating {synthetic_people_count} synthetic people...")
+                from .synthetic_entity_generator import generate_synthetic_entities
+                synthetic = generate_synthetic_entities(
+                    count=synthetic_people_count,
+                    simulation_requirement=simulation_requirement,
+                    document_text=document_text,
+                    existing_entity_names=[e.name for e in filtered.entities],
+                    graph_id=state.graph_id,
+                    storage=storage,
+                )
+                filtered.entities.extend(synthetic)
+                filtered.filtered_count += len(synthetic)
+                for se in synthetic:
+                    et = se.get_entity_type()
+                    if et:
+                        filtered.entity_types.add(et)
+                logger.info(f"Added {len(synthetic)} synthetic entities (total: {filtered.filtered_count})")
+
             state.entities_count = filtered.filtered_count
             state.entity_types = list(filtered.entity_types)
 

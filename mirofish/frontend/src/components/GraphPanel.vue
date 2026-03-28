@@ -55,6 +55,9 @@
             <span v-if="selectedItem.type === 'node'" class="detail-type-badge" :style="{ background: selectedItem.color, color: '#fff' }">
               {{ selectedItem.entityType }}
             </span>
+            <span v-if="selectedItem.type === 'node' && selectedItem.data?.labels?.includes('Synthetic')" class="detail-type-badge" style="background: #00BCD4; color: #fff; margin-left: 4px;">
+              Synthetic
+            </span>
             <button class="detail-close" @click="closeDetailPanel">×</button>
           </div>
           
@@ -218,8 +221,8 @@
       <span class="legend-title">Entity Types</span>
       <div class="legend-items">
         <div class="legend-item" v-for="type in entityTypes" :key="type.name">
-          <span class="legend-dot" :style="{ background: type.color }"></span>
-          <span class="legend-label">{{ type.name }}</span>
+          <span class="legend-dot" :style="{ background: type.color, border: type.synthetic ? '2px dashed #00BCD4' : 'none', width: type.synthetic ? '8px' : '10px', height: type.synthetic ? '8px' : '10px' }"></span>
+          <span class="legend-label">{{ type.name }} ({{ type.count }})</span>
         </div>
       </div>
     </div>
@@ -281,21 +284,36 @@ const toggleSelfLoop = (id) => {
   expandedSelfLoops.value = newSet
 }
 
+// Check if a node is synthetic
+const isSynthetic = (node) => {
+  return node.labels?.includes('Synthetic') || false
+}
+
 // Calculate entity types for legend
 const entityTypes = computed(() => {
   if (!props.graphData?.nodes) return []
   const typeMap = {}
   // Beautiful color palette
   const colors = ['#FF6B35', '#004E89', '#7B2D8E', '#1A936F', '#C5283D', '#E9724C', '#3498db', '#9b59b6', '#27ae60', '#f39c12']
-  
+  const SYNTHETIC_COLOR = '#00BCD4'
+
+  let syntheticCount = 0
   props.graphData.nodes.forEach(node => {
-    const type = node.labels?.find(l => l !== 'Entity') || 'Entity'
+    if (isSynthetic(node)) {
+      syntheticCount++
+      return
+    }
+    const type = node.labels?.find(l => l !== 'Entity' && l !== 'Synthetic') || 'Entity'
     if (!typeMap[type]) {
       typeMap[type] = { name: type, count: 0, color: colors[Object.keys(typeMap).length % colors.length] }
     }
     typeMap[type].count++
   })
-  return Object.values(typeMap)
+  const result = Object.values(typeMap)
+  if (syntheticCount > 0) {
+    result.push({ name: 'Synthetic Person', count: syntheticCount, color: SYNTHETIC_COLOR, synthetic: true })
+  }
+  return result
 })
 
 // Format datetime
@@ -353,12 +371,17 @@ const renderGraph = () => {
   const nodeMap = {}
   nodesData.forEach(n => nodeMap[n.uuid] = n)
 
-  const nodes = nodesData.map(n => ({
-    id: n.uuid,
-    name: n.name || 'Unnamed',
-    type: n.labels?.find(l => l !== 'Entity') || 'Entity',
-    rawData: n
-  }))
+  const SYNTHETIC_COLOR = '#00BCD4'
+  const nodes = nodesData.map(n => {
+    const synthetic = n.labels?.includes('Synthetic') || false
+    return {
+      id: n.uuid,
+      name: n.name || 'Unnamed',
+      type: synthetic ? 'Synthetic Person' : (n.labels?.find(l => l !== 'Entity' && l !== 'Synthetic') || 'Entity'),
+      synthetic,
+      rawData: n
+    }
+  })
 
   const nodeIds = new Set(nodes.map(n => n.id))
 
@@ -654,10 +677,11 @@ const renderGraph = () => {
   const node = nodeGroup.selectAll('circle')
     .data(nodes)
     .enter().append('circle')
-    .attr('r', 10)
+    .attr('r', d => d.synthetic ? 8 : 10)
     .attr('fill', d => getColor(d.type))
-    .attr('stroke', '#fff')
-    .attr('stroke-width', 2.5)
+    .attr('stroke', d => d.synthetic ? SYNTHETIC_COLOR : '#fff')
+    .attr('stroke-width', d => d.synthetic ? 2 : 2.5)
+    .attr('stroke-dasharray', d => d.synthetic ? '4,2' : null)
     .style('cursor', 'pointer')
     .call(d3.drag()
       .on('start', (event, d) => {
