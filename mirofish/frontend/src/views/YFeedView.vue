@@ -202,15 +202,36 @@ function normalizePost(post) {
   // user_name can be empty in some DBs; name often has the handle-style value
   const handle = post.user_name || post.name || `user_${post.user_id}`
   const isRepost = !!(post.original_post_id && !post.content && !post.quote_content)
+  const originalHandle = post.original_user_name || post.original_name || null
+
+  if (isRepost) {
+    // Show the original post's content, attributed to the original author
+    return {
+      id: `post-${post.post_id}`,
+      authorName: post.original_name || '',
+      handle: originalHandle || 'unknown',
+      content: post.original_content || '',
+      quoteContent: null,
+      originalAuthor: null,
+      isRepost: true,
+      repostedBy: handle,
+      likes: post.num_likes || 0,
+      reposts: post.num_shares || 0,
+      comments: 0,
+      timestamp: null,
+      roundNum: post.created_at
+    }
+  }
+
   return {
     id: `post-${post.post_id}`,
     authorName: post.name || '',
     handle: handle,
-    content: isRepost ? '[repost]' : (post.content || ''),
+    content: post.content || '',
     quoteContent: post.quote_content || null,
-    originalAuthor: post.original_post_id ? 'Original post' : null,
-    isRepost: isRepost,
-    repostedBy: isRepost ? handle : null,
+    originalAuthor: originalHandle,
+    isRepost: false,
+    repostedBy: null,
     likes: post.num_likes || 0,
     reposts: post.num_shares || 0,
     comments: 0,

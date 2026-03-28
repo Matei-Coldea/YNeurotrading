@@ -2102,9 +2102,14 @@ def get_simulation_posts_feed(simulation_id: str):
                 SELECT p.post_id, p.user_id, p.content, p.quote_content,
                        p.original_post_id, p.created_at,
                        p.num_likes, p.num_dislikes, p.num_shares,
-                       u.user_name, u.name, u.bio, u.num_followers
+                       u.user_name, u.name, u.bio, u.num_followers,
+                       op.content AS original_content,
+                       ou.user_name AS original_user_name,
+                       ou.name AS original_name
                 FROM post p
                 LEFT JOIN user u ON p.user_id = u.user_id
+                LEFT JOIN post op ON p.original_post_id = op.post_id
+                LEFT JOIN user ou ON op.user_id = ou.user_id
                 ORDER BY p.post_id DESC
                 LIMIT ? OFFSET ?
             """, (limit, offset))
