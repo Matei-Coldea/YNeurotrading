@@ -19,11 +19,9 @@ from agents import (
     set_tracing_disabled,
 )
 
-from mcp_servers.polymarket_server import polymarket_discovery_tools, polymarket_trading_tools
-from mcp_servers.paper_trading_server import paper_trading_exec_tools, paper_trading_read_tools
+from mcp_servers.polymarket_server import polymarket_all_tools
+from mcp_servers.paper_trading_server import paper_trading_all_tools
 from prompts.main_agent import MAIN_SYSTEM_PROMPT
-from prompts.researcher import RESEARCHER_PROMPT
-from prompts.trader import TRADER_PROMPT
 from logger import AgentLogger, get_logger
 
 # Load .env — check agent/ first, fall back to mirofish/
@@ -46,43 +44,23 @@ def setup_openai_client():
     set_tracing_disabled(True)
 
 
-def build_agents():
-    # Create orchestrator first (referenced by sub-agents for handoff-back)
-    main_agent = Agent(
-        name="orchestrator",
+def build_agent():
+    # Single agent with all tools — web search, market data, and paper trading.
+    # Handoffs caused ping-pong issues with gpt-5.4-nano; a single agent with
+    # clear workflow instructions is more reliable.
+    # When we add MiroFish simulation later, it can be added as another tool here
+    # or as a handoff to a dedicated simulation agent (with a larger model).
+    return Agent(
+        name="neuro-trader",
         instructions=MAIN_SYSTEM_PROMPT,
-        tools=polymarket_discovery_tools + paper_trading_read_tools,
-        handoffs=[],  # filled below
+        tools=polymarket_all_tools + paper_trading_all_tools + [WebSearchTool()],
         model=MODEL,
     )
-
-    researcher_agent = Agent(
-        name="researcher",
-        instructions=RESEARCHER_PROMPT + "\n\nAfter completing your research brief, ALWAYS transfer back to the orchestrator so it can continue the trading workflow.",
-        tools=[WebSearchTool()],
-        handoffs=[main_agent],
-        model=MODEL,
-        handoff_description="Web research specialist. Transfer to this agent to research a prediction market topic — gathers news, analysis, and sentiment.",
-    )
-
-    trader_agent = Agent(
-        name="trader",
-        instructions=TRADER_PROMPT + "\n\nAfter executing a trade (or deciding not to), ALWAYS transfer back to the orchestrator so it can continue with the next market or wrap up.",
-        tools=polymarket_trading_tools + paper_trading_exec_tools,
-        handoffs=[main_agent],
-        model=MODEL,
-        handoff_description="Trading execution specialist. Transfer to this agent with market details and probability estimate to analyze orderbooks and execute paper trades.",
-    )
-
-    # Wire up orchestrator handoffs
-    main_agent.handoffs = [researcher_agent, trader_agent]
-
-    return main_agent
 
 
 async def run(prompt: str, max_turns: int = 50):
     setup_openai_client()
-    agent = build_agents()
+    agent = build_agent()
     log, log_file = get_logger()
 
     log.info(f"Model: {MODEL}")
@@ -100,7 +78,7 @@ async def run(prompt: str, max_turns: int = 50):
 
     print(f"\n=== Agent Output ===")
     print(result.final_output)
-    print(f"\n=== Finished (last agent: {result.last_agent.name}) ===")
+    print(f"\n=== Finished ===")
     log.info(f"Final output:\n{result.final_output}")
     return result
 
