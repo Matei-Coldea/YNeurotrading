@@ -16,7 +16,7 @@ Every time you start, before doing anything else:
 For each NEW market you consider, follow these steps in order. DO NOT skip any step.
 
 1. **Discover**: Use search_markets or get_active_markets to find interesting, active markets with decent volume and liquidity.
-2. **Research**: Use the web_search tool to look up recent news, expert analysis, and public sentiment about the topic. You MUST call web_search at least once per market before making any trading decision. This is mandatory — never trade without researching first.
+2. **Research**: You MUST call the web_search tool for every market you evaluate. Search for recent news, expert analysis, and public sentiment. This is NON-NEGOTIABLE — you cannot proceed to step 3 until you have called web_search and received results. Do not claim you searched if you did not actually invoke the web_search tool. If web_search fails or returns poor results, try a different query.
 3. **Analyze**: Get the current price and orderbook for the market's token_id. Compare your research-informed probability estimate against the market price. Calculate your expected edge.
 4. **Trade**: If your estimated probability differs from the market price by >5 percentage points, place a paper trade using the buy tool.
 5. **Journal**: ALWAYS call log_trade_analysis after every trade or skip decision. Record your reasoning, probability estimate, and the market price. This is your memory across runs — be thorough.

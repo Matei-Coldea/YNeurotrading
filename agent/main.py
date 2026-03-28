@@ -13,7 +13,6 @@ from openai import AsyncOpenAI
 from agents import (
     Agent,
     Runner,
-    WebSearchTool,
     set_default_openai_client,
     set_default_openai_api,
     set_tracing_disabled,
@@ -21,6 +20,7 @@ from agents import (
 
 from mcp_servers.polymarket_server import polymarket_all_tools
 from mcp_servers.paper_trading_server import paper_trading_all_tools
+from mcp_servers.web_search import web_search
 from prompts.main_agent import MAIN_SYSTEM_PROMPT
 from logger import AgentLogger, get_logger
 
@@ -53,7 +53,7 @@ def build_agent():
     return Agent(
         name="neuro-trader",
         instructions=MAIN_SYSTEM_PROMPT,
-        tools=polymarket_all_tools + paper_trading_all_tools + [WebSearchTool()],
+        tools=polymarket_all_tools + paper_trading_all_tools + [web_search],
         model=MODEL,
     )
 

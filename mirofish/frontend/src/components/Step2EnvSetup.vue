@@ -61,6 +61,20 @@
             Combined with context，Automatically invoke tools to organize entities and relationships from knowledge graph，Initialize simulation individuals，and give them unique behaviors and memories based on reality seed
           </p>
 
+          <!-- Synthetic People Toggle -->
+          <div v-if="phase === 0" class="synthetic-people-control" style="margin: 12px 0; padding: 12px; background: rgba(255,255,255,0.05); border-radius: 8px; border: 1px solid rgba(255,255,255,0.1);">
+            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px;">
+              <input type="checkbox" v-model="syntheticPeopleEnabled" style="cursor: pointer;" />
+              <span>Add synthetic regular people (for general population sentiment)</span>
+            </label>
+            <div v-if="syntheticPeopleEnabled" style="margin-top: 8px; display: flex; align-items: center; gap: 8px; padding-left: 24px;">
+              <label style="font-size: 13px; color: rgba(255,255,255,0.7);">Count:</label>
+              <input type="number" v-model.number="syntheticPeopleCount" min="5" max="100" step="5"
+                style="width: 70px; padding: 4px 8px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.2); background: rgba(0,0,0,0.3); color: white; font-size: 13px;" />
+              <span style="font-size: 12px; color: rgba(255,255,255,0.5);">LLM-generated diverse personas (5-100)</span>
+            </div>
+          </div>
+
           <!-- Profiles Stats -->
           <div v-if="profiles.length > 0" class="stats-grid">
             <div class="stat-card">
@@ -661,6 +675,10 @@ const entityTypes = ref([])
 const expectedTotal = ref(null)
 const simulationConfig = ref(null)
 const selectedProfile = ref(null)
+
+// Synthetic people controls
+const syntheticPeopleEnabled = ref(false)
+const syntheticPeopleCount = ref(20)
 const showProfilesDetail = ref(true)
 
 // Log deduplication：Record key information from last output
@@ -783,7 +801,8 @@ const startPrepareSimulation = async () => {
     const res = await prepareSimulation({
       simulation_id: props.simulationId,
       use_llm_for_profiles: true,
-      parallel_profile_count: 5
+      parallel_profile_count: 5,
+      synthetic_people_count: syntheticPeopleEnabled.value ? syntheticPeopleCount.value : 0
     })
     
     if (res.success && res.data) {
