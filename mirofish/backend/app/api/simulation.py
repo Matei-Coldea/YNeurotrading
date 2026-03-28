@@ -457,7 +457,6 @@ def prepare_simulation():
         entity_types_list = data.get('entity_types')
         use_llm_for_profiles = data.get('use_llm_for_profiles', True)
         parallel_profile_count = data.get('parallel_profile_count', 5)
-        synthetic_people_count = data.get('synthetic_people_count', 0)
         
         # ========== Get GraphStorage（Capture reference before background task starts） ==========
         storage = current_app.extensions.get('neo4j_storage')
@@ -476,7 +475,7 @@ def prepare_simulation():
                 enrich_with_edges=False  # No edge information，Speed up
             )
             # Save entity count to status（For frontend to get immediately）
-            state.entities_count = filtered_preview.filtered_count + synthetic_people_count
+            state.entities_count = filtered_preview.filtered_count
             state.entity_types = list(filtered_preview.entity_types)
             logger.info(f"Expected entity count: {filtered_preview.filtered_count}, [type][model]: {filtered_preview.entity_types}")
         except Exception as e:
@@ -581,7 +580,6 @@ def prepare_simulation():
                     progress_callback=progress_callback,
                     parallel_profile_count=parallel_profile_count,
                     storage=storage,
-                    synthetic_people_count=synthetic_people_count,
                 )
                 
                 # Task complete
