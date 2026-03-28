@@ -144,12 +144,14 @@ async def run_scan(db: PipelineDB, req: ScanRequest | None = None) -> int:
     return count
 
 
-# ──── Simulation Phase ────
+# ──── Simulation Phase (Option B: project creation only, user does steps in MiroFish) ────
 
 
-async def run_simulation(db: PipelineDB, opp_id: str):
-    """Run MiroFish simulation for an opportunity: generate seed doc, drive 7-step API lifecycle."""
-    from mcp_servers.mirofish_tool import run_mirofish_pipeline
+async def start_simulation_project(db: PipelineDB, opp_id: str) -> dict:
+    """Generate seed doc + prompt, create MiroFish project (ontology only). Returns {project_id}.
+    The user then walks through MiroFish UI for the remaining steps."""
+    import io
+    import httpx
 
     opp = db.get_opportunity(opp_id)
     if not opp:
@@ -158,36 +160,126 @@ async def run_simulation(db: PipelineDB, opp_id: str):
     db.update_opportunity(opp_id, status="simulation_running")
     db.add_event("simulation_started", opportunity_id=opp_id)
 
-    # Step 1: Generate seed document and simulation requirement using the LLM
+    # Step 1: Generate seed document and simulation requirement
     _ensure_client()
     seed_doc, sim_req = await _generate_seed_and_prompt(opp)
     db.update_opportunity(opp_id, seed_document=seed_doc, simulation_requirement=sim_req)
-
-    # Step 2: Drive MiroFish API lifecycle
-    result = await run_mirofish_pipeline(
-        seed_document=seed_doc,
-        simulation_requirement=sim_req,
-        event_callback=lambda event_type, payload: db.add_event(
-            event_type, opportunity_id=opp_id, payload=payload
-        ),
-    )
-
-    # Store MiroFish IDs and report
-    db.update_opportunity(
-        opp_id,
-        status="simulation_complete",
-        mirofish_project_id=result.get("project_id"),
-        mirofish_simulation_id=result.get("simulation_id"),
-        mirofish_report_id=result.get("report_id"),
-        simulation_report_summary=result.get("report_summary"),
-    )
-    db.add_event("simulation_complete", opportunity_id=opp_id, payload={
-        "simulation_id": result.get("simulation_id"),
-        "report_id": result.get("report_id"),
+    db.add_event("seed_generated", opportunity_id=opp_id, payload={
+        "seed_length": len(seed_doc), "requirement_length": len(sim_req),
     })
 
-    # Step 3: Auto-generate trade proposal
-    await _generate_trade_proposal(db, opp_id, result.get("report_text", ""))
+    # Step 2: Call MiroFish ontology/generate to create the project
+    async with httpx.AsyncClient(base_url=MIROFISH_API_URL, timeout=120) as client:
+        files = {"files": ("seed.txt", io.BytesIO(seed_doc.encode()), "text/plain")}
+        data = {"simulation_requirement": sim_req}
+        resp = await client.post("/api/graph/ontology/generate", files=files, data=data)
+        resp.raise_for_status()
+        result = resp.json()
+
+    # MiroFish wraps response in {"data": {...}, "success": true}
+    result_data = result.get("data", result)
+    project_id = result_data.get("project_id")
+    db.update_opportunity(opp_id, mirofish_project_id=project_id)
+    db.add_event("project_created", opportunity_id=opp_id, payload={"project_id": project_id})
+
+    return {"project_id": project_id}
+
+
+async def sync_mirofish_status(db: PipelineDB, opp_id: str):
+    """Check MiroFish API for simulation/report completion, update opportunity."""
+    import httpx
+
+    opp = db.get_opportunity(opp_id)
+    if not opp or not opp.mirofish_project_id:
+        raise ValueError(f"No MiroFish project for opportunity {opp_id}")
+
+    async with httpx.AsyncClient(base_url=MIROFISH_API_URL, timeout=30) as client:
+        # Find simulation for this project
+        if not opp.mirofish_simulation_id:
+            resp = await client.get("/api/simulation/list", params={"project_id": opp.mirofish_project_id})
+            if resp.status_code == 200:
+                sims = resp.json()
+                sim_list = sims if isinstance(sims, list) else sims.get("simulations", sims.get("data", []))
+                if sim_list:
+                    sim = sim_list[0] if isinstance(sim_list[0], dict) else {"simulation_id": sim_list[0]}
+                    sim_id = sim.get("simulation_id") or sim.get("id")
+                    if sim_id:
+                        db.update_opportunity(opp_id, mirofish_simulation_id=sim_id)
+                        opp.mirofish_simulation_id = sim_id
+
+        # Check simulation run status
+        if opp.mirofish_simulation_id:
+            resp = await client.get(f"/api/simulation/{opp.mirofish_simulation_id}/run-status")
+            if resp.status_code == 200:
+                run_data = resp.json()
+                runner_status = run_data.get("runner_status", "")
+                if runner_status in ("completed", "complete", "done", "stopped"):
+                    # Check for report
+                    if not opp.mirofish_report_id:
+                        resp2 = await client.get(f"/api/report/check/{opp.mirofish_simulation_id}")
+                        if resp2.status_code == 200:
+                            report_data = resp2.json()
+                            if report_data.get("has_report") and report_data.get("report_status") in ("completed", "complete"):
+                                db.update_opportunity(
+                                    opp_id,
+                                    mirofish_report_id=report_data.get("report_id"),
+                                    status="simulation_complete",
+                                )
+                                return db.get_opportunity(opp_id)
+                    else:
+                        db.update_opportunity(opp_id, status="simulation_complete")
+                        return db.get_opportunity(opp_id)
+
+    return db.get_opportunity(opp_id)
+
+
+async def analyze_report(db: PipelineDB, opp_id: str) -> dict:
+    """Fetch MiroFish report, LLM generates trade proposal. Returns proposal dict."""
+    import httpx
+
+    opp = db.get_opportunity(opp_id)
+    if not opp:
+        raise ValueError(f"Opportunity {opp_id} not found")
+
+    # First sync to make sure we have simulation_id and report_id
+    if not opp.mirofish_report_id:
+        opp = await sync_mirofish_status(db, opp_id)
+
+    if not opp.mirofish_simulation_id:
+        raise ValueError("No simulation found for this opportunity. Complete the simulation in MiroFish first.")
+
+    # Fetch report from MiroFish
+    report_text = ""
+    async with httpx.AsyncClient(base_url=MIROFISH_API_URL, timeout=60) as client:
+        resp = await client.get(f"/api/report/by-simulation/{opp.mirofish_simulation_id}")
+        if resp.status_code == 200:
+            report_data = resp.json()
+            # Extract text from sections
+            if "sections" in report_data:
+                for section in report_data["sections"]:
+                    report_text += section.get("content", "") + "\n\n"
+            elif "report" in report_data:
+                report_obj = report_data["report"]
+                report_text = report_obj.get("content", "") or report_obj.get("summary", "")
+
+    if not report_text:
+        raise ValueError("Could not fetch report from MiroFish. Generate the report in MiroFish first.")
+
+    db.update_opportunity(opp_id, simulation_report_summary=report_text[:1000])
+
+    # Generate trade proposal
+    await _generate_trade_proposal(db, opp_id, report_text)
+
+    opp = db.get_opportunity(opp_id)
+    return {
+        "trade_side": opp.trade_side,
+        "trade_outcome": opp.trade_outcome,
+        "trade_amount_usd": opp.trade_amount_usd,
+        "trade_reasoning": opp.trade_reasoning,
+        "simulation_sentiment": opp.simulation_sentiment,
+        "probability_estimate": opp.probability_estimate,
+        "estimated_edge": opp.estimated_edge,
+    }
 
 
 async def _generate_seed_and_prompt(opp: Opportunity) -> tuple[str, str]:

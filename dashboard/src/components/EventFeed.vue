@@ -27,16 +27,24 @@ const feedList = ref(null)
 let eventSource = null
 let lastId = 0
 
+let reconnectTimer = null
+
 function connect() {
+  if (eventSource) {
+    eventSource.close()
+    eventSource = null
+  }
   eventSource = connectEventStream(lastId)
   eventSource.onopen = () => { isConnected.value = true }
   eventSource.onerror = () => {
     isConnected.value = false
-    // Reconnect after 3s
-    setTimeout(() => {
-      if (eventSource) eventSource.close()
-      connect()
-    }, 3000)
+    // Don't spam reconnect — use a single 10s timer
+    if (!reconnectTimer) {
+      reconnectTimer = setTimeout(() => {
+        reconnectTimer = null
+        connect()
+      }, 10000)
+    }
   }
   eventSource.onmessage = (e) => {
     try {
@@ -44,7 +52,6 @@ function connect() {
       const id = parseInt(e.lastEventId || '0')
       if (id > lastId) lastId = id
       events.value.unshift({ id, ...data })
-      // Keep max 50 events
       if (events.value.length > 50) events.value.pop()
     } catch {}
   }
@@ -118,6 +125,7 @@ function formatTime(ts) {
 onMounted(connect)
 onUnmounted(() => {
   if (eventSource) eventSource.close()
+  if (reconnectTimer) clearTimeout(reconnectTimer)
 })
 </script>
 

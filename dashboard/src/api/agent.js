@@ -30,8 +30,16 @@ export function getOpportunity(id) {
   return api.get(`/opportunities/${id}`)
 }
 
-export function approveSimulation(id) {
-  return api.post(`/opportunities/${id}/approve-simulation`)
+export function startSimulation(id) {
+  return api.post(`/opportunities/${id}/start-simulation`)
+}
+
+export function syncMirofish(id) {
+  return api.post(`/opportunities/${id}/sync-mirofish`)
+}
+
+export function analyzeReport(id) {
+  return api.post(`/opportunities/${id}/analyze-report`)
 }
 
 export function rejectOpportunity(id) {

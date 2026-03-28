@@ -1,36 +1,36 @@
-/* Neuro-Trade Dashboard — Dark Trading Terminal Theme */
+/* Neuro-Trade Dashboard — MiroFish-matched theme */
 
 :root {
-  --bg-primary: #0a0e17;
-  --bg-secondary: #111827;
-  --bg-card: #1a1f2e;
-  --bg-card-hover: #1f2537;
-  --bg-input: #0d1117;
+  --bg-primary: #ffffff;
+  --bg-secondary: #fafafa;
+  --bg-card: #ffffff;
+  --bg-card-hover: #f5f5f5;
+  --bg-input: #fafafa;
 
-  --text-primary: #e5e7eb;
-  --text-secondary: #9ca3af;
-  --text-muted: #6b7280;
+  --text-primary: #000000;
+  --text-secondary: #666666;
+  --text-muted: #999999;
 
-  --border: #1f2937;
-  --border-light: #374151;
+  --border: #e5e5e5;
+  --border-light: #eeeeee;
 
-  --accent: #3b82f6;
-  --accent-hover: #2563eb;
-  --green: #10b981;
-  --green-dim: rgba(16, 185, 129, 0.15);
-  --red: #ef4444;
-  --red-dim: rgba(239, 68, 68, 0.15);
-  --yellow: #f59e0b;
-  --yellow-dim: rgba(245, 158, 11, 0.15);
-  --purple: #8b5cf6;
-  --purple-dim: rgba(139, 92, 246, 0.15);
+  --accent: #FF4500;
+  --accent-hover: #e03d00;
+  --green: #4CAF50;
+  --green-dim: rgba(76, 175, 80, 0.1);
+  --red: #F44336;
+  --red-dim: rgba(244, 67, 54, 0.1);
+  --yellow: #FF9800;
+  --yellow-dim: rgba(255, 152, 0, 0.1);
+  --purple: #9C27B0;
+  --purple-dim: rgba(156, 39, 176, 0.1);
 
-  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
-  --font-mono: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+  --font-sans: 'Space Grotesk', 'Noto Sans SC', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
 
-  --radius: 8px;
+  --radius: 6px;
   --radius-sm: 4px;
-  --radius-lg: 12px;
+  --radius-lg: 8px;
 
   font-family: var(--font-sans);
   font-size: 14px;
@@ -56,23 +56,23 @@ body {
   min-height: 100vh;
 }
 
-/* Scrollbar */
+/* Scrollbar — match MiroFish */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: transparent;
+  background: #f1f1f1;
 }
 ::-webkit-scrollbar-thumb {
-  background: var(--border-light);
+  background: #ccc;
   border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--text-muted);
+  background: #333;
 }
 
-/* Buttons */
+/* Buttons — MiroFish style */
 .btn {
   display: inline-flex;
   align-items: center;
@@ -80,29 +80,40 @@ body {
   padding: 8px 16px;
   border-radius: var(--radius);
   border: 1px solid var(--border);
-  background: var(--bg-card);
+  background: var(--bg-primary);
   color: var(--text-primary);
-  font-size: 13px;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all 0.2s ease;
+  text-decoration: none;
 }
 .btn:hover {
   background: var(--bg-card-hover);
-  border-color: var(--border-light);
+  border-color: #ccc;
 }
 .btn-primary {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: white;
+  background: #000;
+  border-color: #000;
+  color: #fff;
 }
 .btn-primary:hover {
-  background: var(--accent-hover);
+  background: #222;
+}
+.btn-primary:disabled {
+  background: #e5e5e5;
+  border-color: #e5e5e5;
+  color: #999;
+  cursor: not-allowed;
 }
 .btn-success {
   background: var(--green);
   border-color: var(--green);
   color: white;
+}
+.btn-success:hover {
+  background: #43a047;
 }
 .btn-danger {
   background: transparent;
@@ -114,7 +125,7 @@ body {
 }
 .btn-sm {
   padding: 4px 10px;
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 
 /* Cards */
@@ -125,16 +136,17 @@ body {
   padding: 16px;
 }
 .card:hover {
-  border-color: var(--border-light);
+  border-color: #ccc;
 }
 
-/* Badges */
+/* Badges — MiroFish status style */
 .badge {
   display: inline-flex;
   align-items: center;
   padding: 2px 8px;
-  border-radius: 100px;
-  font-size: 11px;
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -149,15 +161,15 @@ body {
 }
 .badge-yellow {
   background: var(--yellow-dim);
-  color: var(--yellow);
+  color: #e65100;
 }
 .badge-purple {
   background: var(--purple-dim);
   color: var(--purple);
 }
 .badge-blue {
-  background: rgba(59, 130, 246, 0.15);
-  color: var(--accent);
+  background: rgba(0, 0, 0, 0.06);
+  color: #000;
 }
 
 /* Utility */

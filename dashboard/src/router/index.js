@@ -18,6 +18,12 @@ const routes = [
     component: () => import('../views/SimulationPipelineView.vue'),
     props: true,
   },
+  {
+    path: '/opportunity/:id/trade',
+    name: 'TradeAnalysis',
+    component: () => import('../views/TradeAnalysisView.vue'),
+    props: true,
+  },
 ]
 
 const router = createRouter({

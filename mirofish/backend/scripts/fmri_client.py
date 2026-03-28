@@ -9,8 +9,11 @@ import aiohttp
 
 logger = logging.getLogger("mirofish.fmri_client")
 
-FMRI_SERVER_URL = os.getenv("FMRI_SERVER_URL", "http://localhost:8000")
 FMRI_TIMEOUT = aiohttp.ClientTimeout(total=15)
+
+
+def _server_url() -> str:
+    return os.getenv("FMRI_SERVER_URL", "http://localhost:8000")
 
 
 async def get_neural_state(
@@ -22,9 +25,10 @@ async def get_neural_state(
     Returns *None* on any failure so the agent can proceed without
     a neural state (graceful degradation).
     """
+    url = f"{_server_url()}/process"
     try:
         async with session.post(
-            f"{FMRI_SERVER_URL}/process",
+            url,
             json={"text": text},
             timeout=FMRI_TIMEOUT,
         ) as resp:
@@ -34,5 +38,5 @@ async def get_neural_state(
             logger.warning("fMRI server returned status %d", resp.status)
             return None
     except Exception as exc:
-        logger.warning("fMRI request failed: %s", exc)
+        logger.warning("fMRI request failed: %r", exc)
         return None

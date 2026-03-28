@@ -105,16 +105,23 @@
         <button
           v-if="opp.status === 'discovered' && (opp.simulation_potential || 0) >= 3"
           class="btn btn-primary"
-          @click="handleApproveSimulation"
+          @click="handleStartSimulation"
         >
           Run Simulation
         </button>
         <button
-          v-if="['simulation_running', 'simulation_approved'].includes(opp.status)"
-          class="btn btn-primary"
-          @click="$router.push(`/opportunity/${opp.id}/simulation`)"
+          v-if="opp.status === 'simulation_running' && opp.mirofish_project_id"
+          class="btn"
+          @click="window.open(`http://localhost:3000/process/${opp.mirofish_project_id}`, '_blank')"
         >
-          View Simulation
+          Open in MiroFish
+        </button>
+        <button
+          v-if="opp.status === 'simulation_complete'"
+          class="btn btn-primary"
+          @click="$router.push(`/opportunity/${opp.id}/trade`)"
+        >
+          Analyze Trade
         </button>
       </section>
     </div>
@@ -126,7 +133,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { getOpportunity, approveSimulation, approveTrade, rejectTrade } from '../api/agent'
+import { getOpportunity, startSimulation, syncMirofish, analyzeReport, approveTrade, rejectTrade } from '../api/agent'
 
 const props = defineProps({ id: String })
 const router = useRouter()
@@ -146,9 +153,14 @@ async function load() {
   opp.value = res.data.opportunity
 }
 
-async function handleApproveSimulation() {
-  await approveSimulation(props.id)
-  router.push(`/opportunity/${props.id}/simulation`)
+async function handleStartSimulation() {
+  try {
+    const res = await startSimulation(props.id)
+    window.open(res.data.mirofish_url, '_blank')
+    await load()
+  } catch (e) {
+    console.error('Failed to start simulation:', e)
+  }
 }
 
 async function handleApproveTrade() {
@@ -178,9 +190,11 @@ onMounted(load)
 .detail-view { min-height: 100vh; }
 .detail-header {
   display: flex; align-items: center; gap: 16px;
-  padding: 12px 24px; border-bottom: 1px solid var(--border); background: var(--bg-secondary);
+  padding: 0 24px; height: 60px; background: #000; color: #fff;
 }
-.detail-header .logo { font-size: 14px; font-weight: 700; letter-spacing: 2px; color: var(--accent); margin: 0; }
+.detail-header .logo { font-family: var(--font-mono); font-size: 14px; font-weight: 800; letter-spacing: 2px; color: #fff; margin: 0; }
+.detail-header .btn { color: #fff; border-color: #444; }
+.detail-header .btn:hover { background: #222; }
 .detail-body { max-width: 800px; margin: 0 auto; padding: 24px; }
 .detail-section { margin-bottom: 24px; }
 .detail-section h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); margin-bottom: 8px; }

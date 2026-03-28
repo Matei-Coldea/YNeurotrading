@@ -108,9 +108,9 @@ async def get_opportunity(opp_id: str):
     return {"opportunity": opp.model_dump()}
 
 
-@app.post("/api/agent/opportunities/{opp_id}/approve-simulation")
-async def approve_simulation(opp_id: str):
-    """User approves running a MiroFish simulation for this opportunity."""
+@app.post("/api/agent/opportunities/{opp_id}/start-simulation")
+async def start_simulation(opp_id: str):
+    """Generate seed doc + prompt, create MiroFish project, return project_id for redirect."""
     opp = pipeline_db.get_opportunity(opp_id)
     if not opp:
         raise HTTPException(status_code=404, detail="Opportunity not found")
@@ -120,20 +120,53 @@ async def approve_simulation(opp_id: str):
     pipeline_db.update_opportunity(opp_id, status="simulation_approved")
     pipeline_db.add_event("simulation_approved", opportunity_id=opp_id)
 
-    # Run simulation in background
-    from orchestrator import run_simulation
-    asyncio.create_task(_run_simulation_background(opp_id))
-
-    return {"status": "simulation_approved", "opportunity_id": opp_id}
-
-
-async def _run_simulation_background(opp_id: str):
+    # Synchronous — user waits for project creation, then gets redirected
+    from orchestrator import start_simulation_project
     try:
-        from orchestrator import run_simulation
-        await run_simulation(pipeline_db, opp_id)
+        result = await start_simulation_project(pipeline_db, opp_id)
+        return {
+            "status": "project_created",
+            "opportunity_id": opp_id,
+            "project_id": result["project_id"],
+            "mirofish_url": f"http://localhost:3000/process/{result['project_id']}",
+        }
     except Exception as e:
         pipeline_db.update_opportunity(opp_id, status="failed")
-        pipeline_db.add_event("error", opportunity_id=opp_id, payload={"message": str(e), "phase": "simulation"})
+        pipeline_db.add_event("error", opportunity_id=opp_id, payload={"message": str(e), "phase": "start_simulation"})
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/agent/opportunities/{opp_id}/analyze-report")
+async def analyze_report(opp_id: str):
+    """Fetch MiroFish report, LLM generates trade proposal."""
+    opp = pipeline_db.get_opportunity(opp_id)
+    if not opp:
+        raise HTTPException(status_code=404, detail="Opportunity not found")
+
+    from orchestrator import analyze_report as _analyze_report
+    try:
+        result = await _analyze_report(pipeline_db, opp_id)
+        return {"status": "trade_proposed", "opportunity_id": opp_id, "proposal": result}
+    except Exception as e:
+        pipeline_db.add_event("error", opportunity_id=opp_id, payload={"message": str(e), "phase": "analyze_report"})
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/agent/opportunities/{opp_id}/sync-mirofish")
+async def sync_mirofish(opp_id: str):
+    """Check MiroFish for simulation/report status, update opportunity record."""
+    opp = pipeline_db.get_opportunity(opp_id)
+    if not opp:
+        raise HTTPException(status_code=404, detail="Opportunity not found")
+    if not opp.mirofish_project_id:
+        raise HTTPException(status_code=400, detail="No MiroFish project linked")
+
+    from orchestrator import sync_mirofish_status
+    try:
+        updated = await sync_mirofish_status(pipeline_db, opp_id)
+        return {"status": updated.status, "opportunity": updated.model_dump()}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/api/agent/opportunities/{opp_id}/reject")

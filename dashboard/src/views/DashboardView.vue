@@ -35,8 +35,11 @@
               v-for="opp in simReadyOpps"
               :key="opp.id"
               :opp="opp"
+              :loading="simulatingIds.has(opp.id)"
               @select="goToOpportunity"
-              @approve-simulation="handleApproveSimulation"
+              @start-simulation="handleStartSimulation"
+              @sync-mirofish="handleSyncMirofish"
+              @analyze-report="handleAnalyzeReport"
               @approve-trade="handleApproveTrade"
               @reject-trade="handleRejectTrade"
             />
@@ -54,7 +57,11 @@
               v-for="opp in otherOpps"
               :key="opp.id"
               :opp="opp"
+              :loading="simulatingIds.has(opp.id)"
               @select="goToOpportunity"
+              @start-simulation="handleStartSimulation"
+              @sync-mirofish="handleSyncMirofish"
+              @analyze-report="handleAnalyzeReport"
               @approve-trade="handleApproveTrade"
               @reject-trade="handleRejectTrade"
             />
@@ -82,7 +89,8 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   startScan, getScanStatus, getOpportunities,
-  approveSimulation, approveTrade, rejectTrade,
+  startSimulation, syncMirofish, analyzeReport,
+  approveTrade, rejectTrade,
 } from '../api/agent'
 import PipelineFunnel from '../components/PipelineFunnel.vue'
 import OpportunityCard from '../components/OpportunityCard.vue'
@@ -95,6 +103,7 @@ const scanStatus = ref('idle')
 const activeFilter = ref(null)
 const showOther = ref(false)
 const portfolioPanel = ref(null)
+const analyzingIds = ref(new Set())
 
 // Split opportunities into simulation-ready and other
 const filteredOpps = computed(() => {
@@ -163,12 +172,47 @@ function goToOpportunity(id) {
   router.push(`/opportunity/${id}`)
 }
 
-async function handleApproveSimulation(id) {
+const simulatingIds = ref(new Set())
+
+async function handleStartSimulation(id) {
+  // Open window immediately on user click (avoids popup blocker)
+  const win = window.open('about:blank', '_blank')
+  simulatingIds.value.add(id)
   try {
-    await approveSimulation(id)
-    router.push(`/opportunity/${id}/simulation`)
+    const res = await startSimulation(id)
+    const url = res.data.mirofish_url
+    if (win) {
+      win.location.href = url
+    } else {
+      // Popup was blocked — show URL to user
+      alert(`MiroFish simulation ready. Open: ${url}`)
+    }
+    await loadOpportunities()
   } catch (e) {
-    console.error('Failed to approve simulation:', e)
+    console.error('Failed to start simulation:', e)
+    if (win) win.close()
+    alert('Failed to start simulation: ' + (e.response?.data?.detail || e.message))
+    await loadOpportunities()
+  } finally {
+    simulatingIds.value.delete(id)
+  }
+}
+
+async function handleSyncMirofish(id) {
+  try {
+    await syncMirofish(id)
+    await loadOpportunities()
+  } catch (e) {
+    console.error('Failed to sync MiroFish status:', e)
+  }
+}
+
+async function handleAnalyzeReport(id) {
+  try {
+    await analyzeReport(id)
+    await loadOpportunities()
+  } catch (e) {
+    console.error('Failed to analyze report:', e)
   }
 }
 
@@ -209,14 +253,15 @@ onMounted(async () => {
   flex-direction: column;
 }
 
-/* Header */
+/* Header — matches MiroFish navbar */
 .dashboard-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 24px;
-  border-bottom: 1px solid var(--border);
-  background: var(--bg-secondary);
+  padding: 0 24px;
+  height: 60px;
+  background: #000;
+  color: #fff;
 }
 .header-left {
   display: flex;
@@ -224,23 +269,31 @@ onMounted(async () => {
   gap: 16px;
 }
 .logo {
+  font-family: var(--font-mono);
   font-size: 16px;
-  font-weight: 700;
+  font-weight: 800;
   letter-spacing: 2px;
-  color: var(--accent);
+  color: #fff;
   margin: 0;
 }
 .tagline {
-  font-size: 12px;
-  color: var(--text-muted);
+  font-size: 0.75rem;
+  color: #999;
 }
 .header-right {
   display: flex;
   align-items: center;
   gap: 12px;
 }
+.header-right .btn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.header-right .btn-primary:hover {
+  background: var(--accent-hover);
+}
 .scan-status {
-  font-size: 11px;
+  font-size: 0.7rem;
 }
 
 /* Body Layout */
@@ -253,19 +306,20 @@ onMounted(async () => {
   width: 200px;
   flex-shrink: 0;
   border-right: 1px solid var(--border);
-  background: var(--bg-secondary);
+  background: var(--bg-primary);
   overflow-y: auto;
 }
 .main-content {
   flex: 1;
   padding: 20px 24px;
   overflow-y: auto;
+  background: var(--bg-secondary);
 }
 .sidebar-right {
   width: 280px;
   flex-shrink: 0;
   border-left: 1px solid var(--border);
-  background: var(--bg-secondary);
+  background: var(--bg-primary);
   overflow-y: auto;
 }
 .sidebar-divider {
