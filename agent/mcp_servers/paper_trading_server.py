@@ -8,6 +8,7 @@ from agents import function_tool
 from config import STARTING_BALANCE, MAX_TRADE_SIZE
 from paper_trading.portfolio import Portfolio
 from paper_trading.fill_engine import simulate_buy, simulate_sell
+from paper_trading.journal import add_entry, get_entries
 from mcp_servers.polymarket_server import clob_client
 
 # Shared portfolio instance
@@ -154,11 +155,38 @@ def reset_portfolio(
     return json.dumps({"status": "reset", "new_balance": starting_balance})
 
 
+@function_tool
+def log_trade_analysis(
+    market_question: Annotated[str, "The market question"],
+    action: Annotated[str, "What you did: 'buy', 'sell', or 'skip'"],
+    reasoning: Annotated[str, "Your analysis: research findings, probability estimate, edge calculation, and why you decided to act (or not)"],
+    probability_estimate: Annotated[float, "Your estimated probability for the Yes outcome (0.0 to 1.0)"],
+    market_price: Annotated[float, "The market's current implied probability"],
+) -> str:
+    """Log your analysis and reasoning for a trade decision. This persists across runs so you can recall why you made each trade. ALWAYS call this after every trade or skip decision."""
+    add_entry({
+        "market_question": market_question,
+        "action": action,
+        "reasoning": reasoning,
+        "probability_estimate": probability_estimate,
+        "market_price": market_price,
+    })
+    return json.dumps({"status": "logged"})
+
+
+@function_tool
+def get_trade_journal(
+    limit: Annotated[int, "Maximum number of journal entries to return"] = 20,
+) -> str:
+    """Read your past trade analysis journal. Use this at the start of each run to recall your previous reasoning and positions."""
+    entries = get_entries(limit)
+    if not entries:
+        return json.dumps({"entries": [], "message": "No previous journal entries. This is a fresh start."})
+    return json.dumps({"entries": entries, "count": len(entries)}, default=str)
+
+
 # Export tool lists
-paper_trading_all_tools = [buy, sell, get_portfolio, get_trade_history, get_pnl_summary, reset_portfolio]
-
-# Tools for the trader agent (execution-focused)
-paper_trading_exec_tools = [buy, sell, get_portfolio]
-
-# Read-only tools for the main agent
-paper_trading_read_tools = [get_portfolio, get_trade_history, get_pnl_summary]
+paper_trading_all_tools = [
+    buy, sell, get_portfolio, get_trade_history, get_pnl_summary, reset_portfolio,
+    log_trade_analysis, get_trade_journal,
+]
