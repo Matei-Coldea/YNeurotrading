@@ -38,7 +38,7 @@ MODEL = os.getenv("LLM_MODEL_NAME", "gpt-4.1")
 
 
 def setup_openai_client():
-    client = AsyncOpenAI(api_key=API_KEY, base_url=BASE_URL)
+    client = AsyncOpenAI(api_key=API_KEY, base_url=BASE_URL, max_retries=5)
     set_default_openai_client(client, use_for_tracing=False)
     set_default_openai_api("responses")
     set_tracing_disabled(True)
