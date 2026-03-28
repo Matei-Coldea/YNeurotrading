@@ -1,12 +1,11 @@
-"""Polymarket MCP server — read-only market data tools wrapping Gamma API + py-clob-client."""
+"""Polymarket tools — read-only market data wrapping Gamma API + py-clob-client."""
 
 import json
-from typing import Any
+from typing import Annotated
 
 import httpx
 from py_clob_client.client import ClobClient
-
-from claude_agent_sdk import tool, create_sdk_mcp_server
+from agents import function_tool
 
 from ..config import GAMMA_API_URL, CLOB_API_URL
 
@@ -15,18 +14,12 @@ clob_client = ClobClient(CLOB_API_URL)
 http_client = httpx.Client(base_url=GAMMA_API_URL, timeout=30)
 
 
-def _text(data: Any) -> dict:
-    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
-
-
-@tool(
-    "search_markets",
-    "Search Polymarket for prediction markets matching a query. Returns events with their markets, outcomes, and prices.",
-    {"query": str, "limit": int},
-)
-async def search_markets(args: dict[str, Any]) -> dict:
-    query = args["query"]
-    limit = args.get("limit", 10)
+@function_tool
+def search_markets(
+    query: Annotated[str, "Search query to match against market titles"],
+    limit: Annotated[int, "Maximum number of events to return"] = 10,
+) -> str:
+    """Search Polymarket for prediction markets matching a query. Returns events with their markets, outcomes, and prices."""
     resp = http_client.get(
         "/events",
         params={"title_contains": query, "active": "true", "closed": "false", "limit": limit},
@@ -54,20 +47,18 @@ async def search_markets(args: dict[str, Any]) -> dict:
                 for m in markets
             ],
         })
-    return _text(results)
+    return json.dumps(results, default=str)
 
 
-@tool(
-    "get_market_details",
-    "Get detailed information about a specific Polymarket market by its ID.",
-    {"market_id": str},
-)
-async def get_market_details(args: dict[str, Any]) -> dict:
-    market_id = args["market_id"]
+@function_tool
+def get_market_details(
+    market_id: Annotated[str, "The Polymarket market ID"],
+) -> str:
+    """Get detailed information about a specific Polymarket market by its ID."""
     resp = http_client.get(f"/markets/{market_id}")
     resp.raise_for_status()
     m = resp.json()
-    return _text({
+    return json.dumps({
         "market_id": m.get("id"),
         "question": m.get("question"),
         "description": m.get("description", "")[:500],
@@ -80,17 +71,16 @@ async def get_market_details(args: dict[str, Any]) -> dict:
         "closed": m.get("closed"),
         "token_ids": m.get("clobTokenIds"),
         "tags": [t.get("label") for t in m.get("tags", [])],
-    })
+    }, default=str)
 
 
-@tool(
-    "get_active_markets",
-    "List active Polymarket markets, optionally filtered by tag. Good for discovering trading opportunities.",
-    {"tag": str, "limit": int},
-)
-async def get_active_markets(args: dict[str, Any]) -> dict:
-    params: dict[str, Any] = {"active": "true", "closed": "false", "limit": args.get("limit", 20)}
-    tag = args.get("tag")
+@function_tool
+def get_active_markets(
+    tag: Annotated[str, "Optional tag to filter markets (e.g., 'Politics', 'Sports')"] = "",
+    limit: Annotated[int, "Maximum number of markets to return"] = 20,
+) -> str:
+    """List active Polymarket markets, optionally filtered by tag. Good for discovering trading opportunities."""
+    params: dict = {"active": "true", "closed": "false", "limit": limit}
     if tag:
         params["tag"] = tag
     resp = http_client.get("/markets", params=params)
@@ -108,59 +98,50 @@ async def get_active_markets(args: dict[str, Any]) -> dict:
         }
         for m in markets
     ]
-    return _text(results)
+    return json.dumps(results, default=str)
 
 
-@tool(
-    "get_market_tags",
-    "List all available market category tags on Polymarket (e.g., Politics, Sports, Crypto).",
-    {},
-)
-async def get_market_tags(args: dict[str, Any]) -> dict:
+@function_tool
+def get_market_tags() -> str:
+    """List all available market category tags on Polymarket (e.g., Politics, Sports, Crypto)."""
     resp = http_client.get("/tags")
     resp.raise_for_status()
-    return _text(resp.json())
+    return json.dumps(resp.json(), default=str)
 
 
-@tool(
-    "get_orderbook",
-    "Get the full orderbook (bids and asks) for a market outcome token. Use this to assess liquidity and depth before trading.",
-    {"token_id": str},
-)
-async def get_orderbook(args: dict[str, Any]) -> dict:
-    token_id = args["token_id"]
+@function_tool
+def get_orderbook(
+    token_id: Annotated[str, "The CLOB token ID for a specific market outcome"],
+) -> str:
+    """Get the full orderbook (bids and asks) for a market outcome token. Use this to assess liquidity and depth before trading."""
     book = clob_client.get_order_book(token_id)
-    return _text({
+    return json.dumps({
         "token_id": token_id,
         "bids": [{"price": o.price, "size": o.size} for o in book.bids] if book.bids else [],
         "asks": [{"price": o.price, "size": o.size} for o in book.asks] if book.asks else [],
-    })
+    }, default=str)
 
 
-@tool(
-    "get_price",
-    "Get the current best price for a market outcome token.",
-    {"token_id": str},
-)
-async def get_price(args: dict[str, Any]) -> dict:
-    token_id = args["token_id"]
+@function_tool
+def get_price(
+    token_id: Annotated[str, "The CLOB token ID for a specific market outcome"],
+) -> str:
+    """Get the current best price for a market outcome token."""
     price = clob_client.get_price(token_id, "BUY")
-    return _text({"token_id": token_id, "price": price})
+    return json.dumps({"token_id": token_id, "price": price}, default=str)
 
 
-@tool(
-    "get_midpoint",
-    "Get the midpoint price between best bid and best ask for a market outcome token.",
-    {"token_id": str},
-)
-async def get_midpoint(args: dict[str, Any]) -> dict:
-    token_id = args["token_id"]
+@function_tool
+def get_midpoint(
+    token_id: Annotated[str, "The CLOB token ID for a specific market outcome"],
+) -> str:
+    """Get the midpoint price between best bid and best ask for a market outcome token."""
     mid = clob_client.get_midpoint(token_id)
-    return _text({"token_id": token_id, "midpoint": mid})
+    return json.dumps({"token_id": token_id, "midpoint": mid}, default=str)
 
 
-# Export the MCP server and tool list
-polymarket_tools = [
+# Export tool lists for different agents
+polymarket_all_tools = [
     search_markets,
     get_market_details,
     get_active_markets,
@@ -170,8 +151,20 @@ polymarket_tools = [
     get_midpoint,
 ]
 
-polymarket_server = create_sdk_mcp_server(
-    name="polymarket",
-    version="0.1.0",
-    tools=polymarket_tools,
-)
+# Read-only market discovery tools (for main agent)
+polymarket_discovery_tools = [
+    search_markets,
+    get_market_details,
+    get_active_markets,
+    get_market_tags,
+    get_orderbook,
+    get_price,
+    get_midpoint,
+]
+
+# Trading-relevant tools (for trader agent)
+polymarket_trading_tools = [
+    get_orderbook,
+    get_price,
+    get_midpoint,
+]

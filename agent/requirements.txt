@@ -1,4 +1,4 @@
-claude-agent-sdk
+openai-agents
 py-clob-client
 httpx
 pydantic>=2.0.0
