@@ -10,9 +10,16 @@ Neuro-Trade is a Polymarket trading agent that uses neurologically-grounded soci
 
 ### 1. Trading Agent (Orchestrator)
 
-The top-level autonomous agent that scans Polymarket for opportunities and decides how to act. Built on top of Polymarket's official API clients (Gamma API for market discovery, CLOB API for live pricing). Uses a LangGraph ReACT agent with tool-use — the simulation is just one tool among several (web search, market lookup, trade execution).
+The top-level autonomous agent that scans Polymarket for opportunities and decides how to act. Built on the OpenAI Agents SDK with MCP tool servers for Polymarket API access (Gamma API for market discovery, CLOB API for live pricing) and paper trading.
 
-For the hackathon demo, uses paper trading against real Polymarket order books (real prices, simulated money) via polymarket/agents API wrappers.
+Key components in `agent/`:
+- `main.py` — Entry point, single autonomous agent (replaces earlier multi-agent LangGraph design)
+- `mcp_servers/polymarket_server.py` — Market discovery + order book tools
+- `mcp_servers/paper_trading_server.py` — Virtual trading engine
+- `mcp_servers/web_search.py` — Web search integration
+- `paper_trading/` — Portfolio state management, fill engine, trade journal
+
+For the hackathon demo, uses paper trading against real Polymarket order books (real prices, simulated money).
 
 ### 2. MiroFish Social Simulation (Y.com)
 
@@ -26,14 +33,22 @@ A forked/modified version of MiroFish that simulates a fake social media platfor
 
 MiroFish needs to be "Americanized" for US-centric scenarios: swap LLM from Qwen-Plus to GPT-4o/Claude, translate system prompts to English, adjust timezone configs from Beijing to EST/PST.
 
-### 3. TRIBE v2 Brain Injection
+### 3. TRIBE v2 Brain Injection (Beta)
 
-Meta's TRIBE v2 model (~3.8B params for text-only path) predicts fMRI brain responses to text stimuli. Integrated into the MiroFish agent loop to give agents neurologically-grounded emotional responses:
+Meta's TRIBE v2 model (~3.8B params for text-only path) predicts fMRI brain responses to text stimuli. Now integrated into the MiroFish agent loop via:
 
-- Each round, before agents act, their current feed content is run through TRIBE v2
-- TRIBE v2 outputs predicted fMRI activity across ~20k cortical vertices
-- Text input is automatically converted to speech internally by TRIBE v2 before processing (uses LLaMA 3.2-3B + Wav2Vec-BERT)
-- The fMRI output is averaged over time to produce a single cortical activation pattern per post
+- `scripts/neural_agent.py` — Monkey-patches `SocialAgent.perform_action_by_llm()` to inject neural state into the agent's system prompt before each decision
+- `scripts/feed_narrative.py` — Converts the agent's current OASIS social feed (posts, likes, shares) into a natural ~250-word narrative for TRIBEv2 input
+- `scripts/fmri_client.py` — Async HTTP client that sends narratives to the TRIBEv2 server and returns neural state strings
+- `scripts/test_fmri_single.py` — End-to-end test harness (`python test_fmri_single.py --sim sim_ID [--agent N]`)
+
+**Workflow per agent per round:**
+1. Get the agent's current social feed from OASIS
+2. Build a natural language narrative from the feed content and engagement metrics
+3. Send narrative to TRIBEv2 server → receive predicted neural activation state
+4. Inject neural state into agent's system prompt (e.g., threat/reward/uncertainty scores, brain region activations)
+5. Agent makes action decision with neural context
+6. Original prompt is restored after decision (graceful degradation if TRIBEv2 unavailable)
 
 ### 4. fMRI-RAG (Emotion Mapping)
 
@@ -47,11 +62,20 @@ Instead of naively mapping brain regions to emotions (which is bad neuroscience 
 
 ### 5. Y.com Frontend + Brain Visualization
 
-A custom frontend (separate from MiroFish's built-in Vue.js dashboard) that presents the simulation as a demo:
+The Y.com feed is integrated into MiroFish's Vue.js frontend at `/y/:simulationId`. It presents agent posts in a Twitter/X-styled dark theme interface:
 
-- Left side: Y.com — a Twitter/X-styled social media feed showing agent posts, likes, reposts in real-time
-- Right side: Brain activity visualization — shows the TRIBE v2 fMRI predictions as a cortical heatmap, plus the emotion distribution bar chart from the fMRI-RAG step
-- Reads directly from MiroFish's SQLite database and TRIBE v2 outputs
+- **Three-column layout** — Left sidebar (Y branding + nav), center feed (tweet cards), right panel (simulation stats)
+- **Live mode** — During running simulations, polls for new tweets every 3s with animated entry
+- **Historical mode** — For completed simulations, loads posts from SQLite with infinite scroll pagination
+- **Tweet cards** — Avatar (deterministic color from agent name), display name, @handle, content, quoted tweets, engagement buttons with X.com hover colors (reply=blue, repost=green, like=pink)
+- **Reposts** — Display the original post content with a "reposted by" header, resolved via SQL JOIN on `original_post_id`
+- **Entry points** — "Y" button in SimulationRunView header (opens new tab), "Y.com Feed" button in HistoryDatabase modal
+
+Key files: `YFeedView.vue`, `YTweet.vue`, `YSidebar.vue`
+
+Backend: `GET /api/simulation/<id>/posts-feed` JOINs `post` + `user` + original post tables in the SQLite database.
+
+Brain activity visualization (cortical heatmap, emotion distribution) is planned as a future addition to the right panel.
 
 ### 6. Multi-Agent Orchestration (Stretch Goal)
 
@@ -78,13 +102,13 @@ Show that neurologically-grounded agents produce sentiment predictions closer to
 
 | Component | Technology |
 |-----------|-----------|
-| Trading agent framework | LangGraph ReACT + polymarket/agents API wrappers |
-| Polymarket integration | Gamma API (market discovery) + CLOB API (live pricing), paper trading |
+| Trading agent framework | OpenAI Agents SDK + MCP tool servers |
+| Polymarket integration | Gamma API (market discovery) + CLOB API (live pricing), paper trading engine |
 | Social simulation engine | MiroFish (built on OASIS by CAMEL-AI) |
 | Brain encoding model | Meta TRIBE v2 (~3.8B params text-only, ~709MB checkpoint + LLaMA 3.2-3B + Wav2Vec-BERT) |
 | Emotion reference DB | Stanford Emotional Narratives Dataset (SEND) processed through TRIBE v2 |
-| LLM for agents | GPT-4o or Claude (replacing MiroFish's default Qwen-Plus) |
-| Agent memory | Zep Cloud (free tier) |
-| Simulation data | SQLite |
-| Frontend | Custom (Y.com + brain viz), reads from MiroFish SQLite |
+| LLM for agents | GPT-4o or GPT-4o-mini (via OpenAI API) |
+| Graph memory | Neo4j AuraDB (free tier) |
+| Simulation data | SQLite (twitter_simulation.db per simulation) |
+| Frontend | Vue 3 + Vite (MiroFish dashboard + integrated Y.com feed) |
 | Orchestration (stretch) | CrewAI |

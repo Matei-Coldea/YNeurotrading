@@ -32,11 +32,12 @@ Fully local fork running on Neo4j CE + Ollama. All Zep Cloud dependencies remove
 - [ ] Quantization-aware config: auto-select context window based on available VRAM
 
 ### v0.6.0 — Enhanced Simulation
-- [ ] Real-time simulation dashboard with WebSocket updates
+- [x] Real-time simulation dashboard (polling-based, 2-3s intervals — WebSocket not needed)
+- [x] Y.com live feed — Twitter/X-styled UI for viewing agent posts in real-time and historically
 - [ ] Agent memory persistence across simulation rounds (currently in-memory)
 - [ ] Custom agent archetypes: define personality templates beyond OASIS defaults
 - [ ] Multi-language simulation support (agents can interact in different languages)
-- [ ] Export simulation transcripts as structured JSON for external analysis
+- [x] Export simulation transcripts as structured JSON (JSONL action logs per platform)
 
 ### v0.7.0 — Graph Intelligence
 - [ ] Community detection (Louvain/Leiden) to auto-identify entity clusters
