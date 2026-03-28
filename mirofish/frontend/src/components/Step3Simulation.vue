@@ -388,13 +388,13 @@ const doStartSimulation = async () => {
 
   isStarting.value = true
   startError.value = null
-  addLog('Starting dual-platform parallel simulation...')
+  addLog('Starting Twitter simulation...')
   emit('update-status', 'processing')
 
   try {
     const params = {
       simulation_id: props.simulationId,
-      platform: 'parallel',
+      platform: 'twitter',
       force: true,  // Force restart
       enable_graph_memory_update: true  // Enable dynamic graph update
     }
