@@ -1,0 +1,17 @@
+data/
+cache/
+tribev2/
+neurosynth_data/
+*.npz
+*.npy
+.env
+runpod
+runpod.pub
+*.pem
+__pycache__/
+*.pyc
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+venv/
