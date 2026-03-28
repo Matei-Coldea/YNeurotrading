@@ -199,16 +199,18 @@ function normalizeAction(action) {
 }
 
 function normalizePost(post) {
-  const handle = post.user_name || `user_${post.user_id}`
+  // user_name can be empty in some DBs; name often has the handle-style value
+  const handle = post.user_name || post.name || `user_${post.user_id}`
+  const isRepost = !!(post.original_post_id && !post.content && !post.quote_content)
   return {
     id: `post-${post.post_id}`,
     authorName: post.name || '',
     handle: handle,
-    content: post.content || '',
+    content: isRepost ? '[repost]' : (post.content || ''),
     quoteContent: post.quote_content || null,
     originalAuthor: post.original_post_id ? 'Original post' : null,
-    isRepost: !!(post.original_post_id && !post.content && !post.quote_content),
-    repostedBy: null,
+    isRepost: isRepost,
+    repostedBy: isRepost ? handle : null,
     likes: post.num_likes || 0,
     reposts: post.num_shares || 0,
     comments: 0,
@@ -222,8 +224,8 @@ function normalizePost(post) {
 async function pollStatus() {
   try {
     const res = await getRunStatus(props.simulationId)
-    if (res.data?.data) {
-      const d = res.data.data
+    if (res?.data) {
+      const d = res.data
       runnerStatus.value = d.runner_status || 'unknown'
       currentRound.value = d.twitter_current_round || d.current_round || 0
       totalRounds.value = d.total_rounds || 0
@@ -237,9 +239,9 @@ async function pollStatus() {
 async function pollDetail() {
   try {
     const res = await getRunStatusDetail(props.simulationId)
-    if (!res.data?.data?.all_actions) return
+    if (!res?.data?.all_actions) return
 
-    const actions = res.data.data.all_actions
+    const actions = res?.data?.all_actions
     const postTypes = new Set(['CREATE_POST', 'QUOTE_POST', 'REPOST'])
     const newTweets = []
 
@@ -297,9 +299,9 @@ async function loadHistoricalPosts() {
 
   try {
     const res = await getPostsFeed(props.simulationId, 'twitter', PAGE_SIZE, offset.value)
-    if (res.data?.data) {
-      const d = res.data.data
-      const newPosts = (d.posts || []).map(normalizePost).filter(p => p.content || p.quoteContent)
+    if (res?.data) {
+      const d = res.data
+      const newPosts = (d.posts || []).map(normalizePost)
 
       tweets.value = [...tweets.value, ...newPosts]
       totalPosts.value = d.total || tweets.value.length
@@ -336,8 +338,8 @@ async function init() {
   try {
     // Detect mode
     const res = await getRunStatus(props.simulationId)
-    if (res.data?.data) {
-      const d = res.data.data
+    if (res?.data) {
+      const d = res.data
       runnerStatus.value = d.runner_status || 'completed'
       currentRound.value = d.twitter_current_round || d.current_round || 0
       totalRounds.value = d.total_rounds || 0
