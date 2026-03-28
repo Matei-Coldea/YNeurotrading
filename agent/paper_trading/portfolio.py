@@ -2,8 +2,8 @@ import sqlite3
 from datetime import datetime
 from pathlib import Path
 
-from ..config import DB_PATH, DATA_DIR, STARTING_BALANCE
-from .models import Position, Trade, PortfolioSnapshot
+from config import DB_PATH, DATA_DIR, STARTING_BALANCE
+from paper_trading.models import Position, Trade, PortfolioSnapshot
 
 
 class Portfolio:

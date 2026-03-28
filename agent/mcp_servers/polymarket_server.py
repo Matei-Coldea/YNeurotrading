@@ -7,7 +7,7 @@ import httpx
 from py_clob_client.client import ClobClient
 from agents import function_tool
 
-from ..config import GAMMA_API_URL, CLOB_API_URL
+from config import GAMMA_API_URL, CLOB_API_URL
 
 # Shared clients (read-only, no auth)
 clob_client = ClobClient(CLOB_API_URL)
@@ -42,7 +42,7 @@ def search_markets(
                     "outcome_prices": m.get("outcomePrices"),
                     "volume": m.get("volume"),
                     "liquidity": m.get("liquidity"),
-                    "token_ids": [m.get("clobTokenIds", [None])[i] for i in range(len(m.get("outcomes", [])))],
+                    "token_ids": m.get("clobTokenIds") or [],
                 }
                 for m in markets
             ],

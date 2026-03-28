@@ -2,6 +2,11 @@
 
 import asyncio
 import os
+import sys
+from pathlib import Path
+
+# Ensure agent/ is on sys.path for absolute imports
+sys.path.insert(0, str(Path(__file__).parent))
 
 from dotenv import load_dotenv
 from openai import AsyncOpenAI
@@ -19,9 +24,15 @@ from mcp_servers.paper_trading_server import paper_trading_exec_tools, paper_tra
 from prompts.main_agent import MAIN_SYSTEM_PROMPT
 from prompts.researcher import RESEARCHER_PROMPT
 from prompts.trader import TRADER_PROMPT
+from logger import AgentLogger, get_logger
 
-# Load environment
-load_dotenv()
+# Load .env — check agent/ first, fall back to mirofish/
+_agent_dir = Path(__file__).parent
+_env_candidates = [_agent_dir / ".env", _agent_dir.parent / "mirofish" / ".env"]
+for env_path in _env_candidates:
+    if env_path.exists():
+        load_dotenv(env_path)
+        break
 
 API_KEY = os.getenv("LLM_API_KEY", "")
 BASE_URL = os.getenv("LLM_BASE_URL", "https://api.openai.com/v1")
@@ -35,51 +46,66 @@ def setup_openai_client():
     set_tracing_disabled(True)
 
 
-# --- Agent definitions ---
+def build_agents():
+    researcher_agent = Agent(
+        name="researcher",
+        instructions=RESEARCHER_PROMPT,
+        tools=[WebSearchTool()],
+        model=MODEL,
+        handoff_description="Web research specialist. Transfer to this agent to research a prediction market topic — gathers news, analysis, and sentiment.",
+    )
 
-researcher_agent = Agent(
-    name="researcher",
-    instructions=RESEARCHER_PROMPT,
-    tools=[WebSearchTool()],
-    model=MODEL,
-    handoff_description="Web research specialist. Transfer to this agent to research a prediction market topic — gathers news, analysis, and sentiment.",
-)
+    trader_agent = Agent(
+        name="trader",
+        instructions=TRADER_PROMPT,
+        tools=polymarket_trading_tools + paper_trading_exec_tools,
+        model=MODEL,
+        handoff_description="Trading execution specialist. Transfer to this agent with market details and probability estimate to analyze orderbooks and execute paper trades.",
+    )
 
-trader_agent = Agent(
-    name="trader",
-    instructions=TRADER_PROMPT,
-    tools=polymarket_trading_tools + paper_trading_exec_tools,
-    model=MODEL,
-    handoff_description="Trading execution specialist. Transfer to this agent with market details and probability estimate to analyze orderbooks and execute paper trades.",
-)
+    main_agent = Agent(
+        name="orchestrator",
+        instructions=MAIN_SYSTEM_PROMPT,
+        tools=polymarket_discovery_tools + paper_trading_read_tools,
+        handoffs=[researcher_agent, trader_agent],
+        model=MODEL,
+    )
 
-main_agent = Agent(
-    name="orchestrator",
-    instructions=MAIN_SYSTEM_PROMPT,
-    tools=polymarket_discovery_tools + paper_trading_read_tools,
-    handoffs=[researcher_agent, trader_agent],
-    model=MODEL,
-)
+    return main_agent
+
+
+async def run(prompt: str, max_turns: int = 50):
+    setup_openai_client()
+    agent = build_agents()
+    log, log_file = get_logger()
+
+    log.info(f"Model: {MODEL}")
+    log.info(f"Log file: {log_file}")
+    print(f"=== Neuro-Trade Paper Trading Agent ===")
+    print(f"Model: {MODEL}")
+    print(f"Log: {log_file}\n")
+
+    result = await Runner.run(
+        agent,
+        prompt,
+        max_turns=max_turns,
+        hooks=AgentLogger(),
+    )
+
+    print(f"\n=== Agent Output ===")
+    print(result.final_output)
+    print(f"\n=== Finished (last agent: {result.last_agent.name}) ===")
+    log.info(f"Final output:\n{result.final_output}")
+    return result
 
 
 async def main():
-    setup_openai_client()
-
-    print("=== Neuro-Trade Paper Trading Agent ===")
-    print(f"Model: {MODEL}")
-    print("Starting with $1,000 paper money against real Polymarket orderbooks.\n")
-
-    result = await Runner.run(
-        main_agent,
+    await run(
         "Scan Polymarket for interesting prediction markets. "
         "Find 2-3 markets where you think public sentiment or recent news creates an edge. "
         "Research each one, then make paper trades where you see value.",
         max_turns=50,
     )
-
-    print("\n=== Agent Output ===")
-    print(result.final_output)
-    print(f"\n=== Finished (last agent: {result.last_agent.name}) ===")
 
 
 if __name__ == "__main__":

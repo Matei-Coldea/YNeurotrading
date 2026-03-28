@@ -5,10 +5,10 @@ from typing import Annotated
 
 from agents import function_tool
 
-from ..config import STARTING_BALANCE, MAX_TRADE_SIZE
-from ..paper_trading.portfolio import Portfolio
-from ..paper_trading.fill_engine import simulate_buy, simulate_sell
-from .polymarket_server import clob_client
+from config import STARTING_BALANCE, MAX_TRADE_SIZE
+from paper_trading.portfolio import Portfolio
+from paper_trading.fill_engine import simulate_buy, simulate_sell
+from mcp_servers.polymarket_server import clob_client
 
 # Shared portfolio instance
 portfolio = Portfolio()
