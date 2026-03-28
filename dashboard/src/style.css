@@ -1,0 +1,169 @@
+/* Neuro-Trade Dashboard — Dark Trading Terminal Theme */
+
+:root {
+  --bg-primary: #0a0e17;
+  --bg-secondary: #111827;
+  --bg-card: #1a1f2e;
+  --bg-card-hover: #1f2537;
+  --bg-input: #0d1117;
+
+  --text-primary: #e5e7eb;
+  --text-secondary: #9ca3af;
+  --text-muted: #6b7280;
+
+  --border: #1f2937;
+  --border-light: #374151;
+
+  --accent: #3b82f6;
+  --accent-hover: #2563eb;
+  --green: #10b981;
+  --green-dim: rgba(16, 185, 129, 0.15);
+  --red: #ef4444;
+  --red-dim: rgba(239, 68, 68, 0.15);
+  --yellow: #f59e0b;
+  --yellow-dim: rgba(245, 158, 11, 0.15);
+  --purple: #8b5cf6;
+  --purple-dim: rgba(139, 92, 246, 0.15);
+
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+
+  --radius: 8px;
+  --radius-sm: 4px;
+  --radius-lg: 12px;
+
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text-primary);
+  background: var(--bg-primary);
+  -webkit-font-smoothing: antialiased;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--bg-primary);
+}
+
+#app {
+  min-height: 100vh;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-light);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+/* Buttons */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.btn:hover {
+  background: var(--bg-card-hover);
+  border-color: var(--border-light);
+}
+.btn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
+}
+.btn-primary:hover {
+  background: var(--accent-hover);
+}
+.btn-success {
+  background: var(--green);
+  border-color: var(--green);
+  color: white;
+}
+.btn-danger {
+  background: transparent;
+  border-color: var(--red);
+  color: var(--red);
+}
+.btn-danger:hover {
+  background: var(--red-dim);
+}
+.btn-sm {
+  padding: 4px 10px;
+  font-size: 12px;
+}
+
+/* Cards */
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 16px;
+}
+.card:hover {
+  border-color: var(--border-light);
+}
+
+/* Badges */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 100px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.badge-green {
+  background: var(--green-dim);
+  color: var(--green);
+}
+.badge-red {
+  background: var(--red-dim);
+  color: var(--red);
+}
+.badge-yellow {
+  background: var(--yellow-dim);
+  color: var(--yellow);
+}
+.badge-purple {
+  background: var(--purple-dim);
+  color: var(--purple);
+}
+.badge-blue {
+  background: rgba(59, 130, 246, 0.15);
+  color: var(--accent);
+}
+
+/* Utility */
+.text-green { color: var(--green); }
+.text-red { color: var(--red); }
+.text-yellow { color: var(--yellow); }
+.text-muted { color: var(--text-muted); }
+.text-secondary { color: var(--text-secondary); }
+.font-mono { font-family: var(--font-mono); }
