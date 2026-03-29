@@ -100,6 +100,40 @@
         </div>
       </section>
 
+      <!-- Trade -->
+      <section v-if="opp.outcome_prices?.length >= 2" class="detail-section">
+        <h2>Trade</h2>
+        <div class="amount-row">
+          <span class="amount-label">Amount</span>
+          <div class="amount-presets">
+            <button v-for="a in [10, 25, 50, 100, 250]" :key="a"
+              class="preset-btn" :class="{ active: tradeAmount === a }"
+              @click="tradeAmount = a"
+            >${{ a }}</button>
+          </div>
+          <div class="amount-input-wrap">
+            <span class="amount-sign">$</span>
+            <input type="number" v-model.number="tradeAmount" min="1" class="amount-input font-mono" />
+          </div>
+        </div>
+        <div class="trade-pair">
+          <button class="trade-btn trade-yes" @click.stop="handleManualTrade('Yes')">
+            Buy Yes <span class="trade-price font-mono">${{ formatPrice(opp.outcome_prices[0]) }}</span>
+          </button>
+          <button class="trade-btn trade-no" @click.stop="handleManualTrade('No')">
+            Buy No <span class="trade-price font-mono">${{ formatPrice(opp.outcome_prices[1]) }}</span>
+          </button>
+        </div>
+      </section>
+
+      <section v-if="opp.status === 'trade_executed' && opp.trade_fill_price && opp.trade_side !== 'skip'" class="detail-section">
+        <h2>Position</h2>
+        <div class="card fill-card">
+          <span class="fill-label">Filled</span>
+          <span class="font-mono">{{ opp.trade_fill_shares?.toFixed(2) }} shares @ ${{ opp.trade_fill_price?.toFixed(4) }}</span>
+        </div>
+      </section>
+
       <!-- Actions -->
       <section class="detail-section actions-section">
         <button
@@ -125,12 +159,14 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+
 import { useRouter } from 'vue-router'
-import { getOpportunity, analyzeReport, approveTrade, rejectTrade } from '../api/agent'
+import { getOpportunity, analyzeReport, approveTrade, rejectTrade, manualTrade } from '../api/agent'
 
 const props = defineProps({ id: String })
 const router = useRouter()
 const opp = ref(null)
+const tradeAmount = ref(50)
 
 const statusBadgeClass = computed(() => {
   const map = {
@@ -154,6 +190,15 @@ async function handleApproveTrade() {
 async function handleRejectTrade() {
   await rejectTrade(props.id)
   await load()
+}
+
+async function handleManualTrade(outcome) {
+  try {
+    await manualTrade(props.id, { side: 'buy', outcome, amount_usd: tradeAmount.value })
+    await load()
+  } catch (e) {
+    console.error('Trade failed:', e)
+  }
 }
 
 function formatPrice(p) { return p ? parseFloat(p).toFixed(2) : '—' }
@@ -206,5 +251,89 @@ onMounted(load)
 .trade-actions { display: flex; gap: 8px; margin-top: 12px; }
 .trade-fill { margin-top: 8px; font-size: 13px; }
 .actions-section { display: flex; gap: 8px; }
+
+/* Amount selector */
+.amount-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.amount-label {
+  font-size: 12px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  letter-spacing: 0.5px;
+}
+.amount-presets { display: flex; gap: 4px; }
+.preset-btn {
+  padding: 4px 10px;
+  font-size: 12px;
+  font-family: var(--font-mono);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-primary);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.preset-btn:hover { background: var(--bg-secondary); }
+.preset-btn.active {
+  background: var(--text-primary);
+  color: var(--bg-primary);
+  border-color: var(--text-primary);
+}
+.amount-input-wrap {
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0 8px;
+  margin-left: auto;
+}
+.amount-sign { font-size: 13px; color: var(--text-muted); }
+.amount-input {
+  width: 60px;
+  border: none;
+  outline: none;
+  font-size: 13px;
+  padding: 4px 2px;
+  background: transparent;
+  color: var(--text-primary);
+}
+.amount-input::-webkit-inner-spin-button { -webkit-appearance: none; }
+
+/* Trade buttons */
+.trade-pair { display: flex; gap: 10px; }
+.trade-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 0;
+  border-radius: var(--radius);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+  border: 1.5px solid;
+}
+.trade-yes {
+  background: var(--green-dim);
+  border-color: var(--green);
+  color: #2e7d32;
+}
+.trade-yes:hover { background: var(--green); color: #fff; }
+.trade-no {
+  background: var(--red-dim);
+  border-color: var(--red);
+  color: #c62828;
+}
+.trade-no:hover { background: var(--red); color: #fff; }
+.trade-price { font-size: 14px; opacity: 0.8; }
+.fill-card {
+  display: flex; align-items: center; gap: 10px;
+}
+.fill-label { color: var(--green); font-weight: 600; }
 .loading { text-align: center; padding: 60px; color: var(--text-muted); }
 </style>

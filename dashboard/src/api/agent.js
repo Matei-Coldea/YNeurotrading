@@ -54,6 +54,22 @@ export function rejectTrade(id) {
   return api.post(`/opportunities/${id}/reject-trade`)
 }
 
+// ── Prices ──
+
+export function refreshPrices() {
+  return api.post('/refresh-prices')
+}
+
+// ── Manual Trading ──
+
+export function manualTrade(id, { side, outcome, amount_usd }) {
+  return api.post(`/opportunities/${id}/manual-trade`, { side, outcome, amount_usd })
+}
+
+export function sellPosition(token_id) {
+  return api.post('/portfolio/sell', { token_id })
+}
+
 // ── Portfolio ──
 
 export function getPortfolio() {

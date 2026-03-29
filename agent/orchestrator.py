@@ -212,6 +212,7 @@ async def sync_mirofish_status(db: PipelineDB, opp_id: str):
             resp = await client.get(f"/api/simulation/{opp.mirofish_simulation_id}/run-status")
             if resp.status_code == 200:
                 run_data = resp.json()
+                run_data = run_data.get("data", run_data) if isinstance(run_data, dict) else run_data
                 runner_status = run_data.get("runner_status", "")
                 if runner_status in ("completed", "complete", "done", "stopped"):
                     # Check for report
@@ -273,13 +274,17 @@ async def analyze_report(db: PipelineDB, opp_id: str) -> dict:
         resp = await client.get(f"/api/report/by-simulation/{opp.mirofish_simulation_id}")
         if resp.status_code == 200:
             report_data = resp.json()
-            # Extract text from sections
-            if "sections" in report_data:
+            report_data = report_data.get("data", report_data) if isinstance(report_data, dict) else report_data
+            # Full markdown content is the best source
+            if report_data.get("markdown_content"):
+                report_text = report_data["markdown_content"]
+            # Fall back to outline sections
+            elif report_data.get("outline", {}).get("sections"):
+                for section in report_data["outline"]["sections"]:
+                    report_text += section.get("content", "") + "\n\n"
+            elif "sections" in report_data:
                 for section in report_data["sections"]:
                     report_text += section.get("content", "") + "\n\n"
-            elif "report" in report_data:
-                report_obj = report_data["report"]
-                report_text = report_obj.get("content", "") or report_obj.get("summary", "")
 
     if not report_text:
         raise ValueError("Could not fetch report from MiroFish. Generate the report in MiroFish first.")

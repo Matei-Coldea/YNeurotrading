@@ -41,6 +41,7 @@
               @analyze-report="handleAnalyzeReport"
               @approve-trade="handleApproveTrade"
               @reject-trade="handleRejectTrade"
+              @manual-trade="handleManualTrade"
             />
           </div>
         </section>
@@ -61,6 +62,7 @@
               @analyze-report="handleAnalyzeReport"
               @approve-trade="handleApproveTrade"
               @reject-trade="handleRejectTrade"
+              @manual-trade="handleManualTrade"
             />
           </div>
         </section>
@@ -82,11 +84,11 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   startScan, getScanStatus, getOpportunities,
-  analyzeReport, approveTrade, rejectTrade,
+  analyzeReport, approveTrade, rejectTrade, manualTrade, refreshPrices,
 } from '../api/agent'
 import PipelineFunnel from '../components/PipelineFunnel.vue'
 import OpportunityCard from '../components/OpportunityCard.vue'
@@ -200,14 +202,43 @@ async function handleRejectTrade(id) {
   }
 }
 
+async function handleManualTrade({ id, outcome, amount }) {
+  try {
+    await manualTrade(id, { side: 'buy', outcome, amount_usd: amount || 50 })
+    await loadOpportunities()
+    portfolioPanel.value?.refresh()
+  } catch (e) {
+    console.error('Manual trade failed:', e)
+  }
+}
+
+let priceTimer = null
+
 onMounted(async () => {
+  // Show opportunities immediately from DB
   await loadOpportunities()
+
+  // Refresh prices in background, then reload
+  refreshPrices().then(() => loadOpportunities()).catch(() => {})
+
+  // Auto-refresh prices every 30s
+  priceTimer = setInterval(async () => {
+    try {
+      await refreshPrices()
+      await loadOpportunities()
+    } catch {}
+  }, 30000)
+
   // Check if a scan is already running
   try {
     const res = await getScanStatus()
     scanStatus.value = res.data.status
     if (res.data.status === 'running') pollScan()
   } catch {}
+})
+
+onUnmounted(() => {
+  if (priceTimer) clearInterval(priceTimer)
 })
 </script>
 

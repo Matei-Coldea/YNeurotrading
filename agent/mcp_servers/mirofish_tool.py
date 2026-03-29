@@ -14,6 +14,13 @@ POLL_INTERVAL_MAX = 15
 POLL_TIMEOUT = 1800  # 30 minutes max per step
 
 
+def _unwrap(resp_json: dict) -> dict:
+    """MiroFish wraps all responses in {"data": {...}, "success": true}. Unwrap it."""
+    if isinstance(resp_json, dict) and "data" in resp_json and "success" in resp_json:
+        return resp_json["data"]
+    return resp_json
+
+
 async def run_mirofish_pipeline(
     seed_document: str,
     simulation_requirement: str,
@@ -36,7 +43,7 @@ async def run_mirofish_pipeline(
         data = {"simulation_requirement": simulation_requirement}
         resp = await client.post("/api/graph/ontology/generate", files=files, data=data)
         resp.raise_for_status()
-        ontology_result = resp.json()
+        ontology_result = _unwrap(resp.json())
         project_id = ontology_result.get("project_id")
 
         ontology = ontology_result.get("ontology", {})
@@ -55,7 +62,7 @@ async def run_mirofish_pipeline(
 
         resp = await client.post("/api/graph/build", json={"project_id": project_id})
         resp.raise_for_status()
-        build_result = resp.json()
+        build_result = _unwrap(resp.json())
         task_id = build_result.get("task_id")
 
         # Poll for graph build completion
@@ -76,7 +83,7 @@ async def run_mirofish_pipeline(
             "enable_reddit": False,
         })
         resp.raise_for_status()
-        sim_result = resp.json()
+        sim_result = _unwrap(resp.json())
         simulation_id = sim_result.get("simulation_id")
 
         emit("simulation_create_complete", {
@@ -93,7 +100,7 @@ async def run_mirofish_pipeline(
             "parallel_profile_count": 5,
         })
         resp.raise_for_status()
-        prepare_result = resp.json()
+        prepare_result = _unwrap(resp.json())
         prepare_task_id = prepare_result.get("task_id")
 
         # Poll for preparation completion
@@ -121,7 +128,7 @@ async def run_mirofish_pipeline(
 
         resp = await client.post("/api/report/generate", json={"simulation_id": simulation_id})
         resp.raise_for_status()
-        report_result = resp.json()
+        report_result = _unwrap(resp.json())
         report_id = report_result.get("report_id")
         report_task_id = report_result.get("task_id")
 
@@ -133,18 +140,21 @@ async def run_mirofish_pipeline(
         # ── Step 7: Fetch Report ──
         resp = await client.get(f"/api/report/by-simulation/{simulation_id}")
         resp.raise_for_status()
-        report_data = resp.json()
+        report_data = _unwrap(resp.json())
 
-        # Extract report text from sections
+        # Extract report text
         report_text = ""
         report_summary = ""
-        if "sections" in report_data:
-            for section in report_data["sections"]:
+        if report_data.get("markdown_content"):
+            report_text = report_data["markdown_content"]
+            report_summary = report_text[:1000]
+        elif report_data.get("outline", {}).get("sections"):
+            for section in report_data["outline"]["sections"]:
                 report_text += section.get("content", "") + "\n\n"
             report_summary = report_text[:1000]
-        elif "report" in report_data:
-            report_obj = report_data["report"]
-            report_text = report_obj.get("content", "") or report_obj.get("summary", "")
+        elif "sections" in report_data:
+            for section in report_data["sections"]:
+                report_text += section.get("content", "") + "\n\n"
             report_summary = report_text[:1000]
 
         return {
@@ -168,7 +178,7 @@ async def _poll_graph_build(client: httpx.AsyncClient, task_id: str, emit: Calla
         resp = await client.post("/api/graph/build/status", json={"task_id": task_id})
         if resp.status_code != 200:
             continue
-        data = resp.json()
+        data = _unwrap(resp.json())
         status = data.get("status", "")
         progress = data.get("progress", 0)
 
@@ -198,7 +208,7 @@ async def _poll_prepare(client: httpx.AsyncClient, simulation_id: str, task_id: 
         })
         if resp.status_code != 200:
             continue
-        data = resp.json()
+        data = _unwrap(resp.json())
         status = data.get("status", "")
         progress = data.get("progress", 0)
 
@@ -230,7 +240,7 @@ async def _poll_simulation_run(client: httpx.AsyncClient, simulation_id: str, em
         resp = await client.get(f"/api/simulation/{simulation_id}/run-status")
         if resp.status_code != 200:
             continue
-        data = resp.json()
+        data = _unwrap(resp.json())
         runner_status = data.get("runner_status", "")
         current_round = data.get("current_round", 0)
         total_rounds = data.get("total_rounds", 0)
@@ -266,7 +276,7 @@ async def _poll_report(client: httpx.AsyncClient, simulation_id: str, report_id:
         })
         if resp.status_code != 200:
             continue
-        data = resp.json()
+        data = _unwrap(resp.json())
         status = data.get("status", "")
 
         emit("report_progress", {

@@ -10,7 +10,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from contextlib import asynccontextmanager
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from sse_starlette.sse import EventSourceResponse
 
@@ -262,6 +262,122 @@ async def get_trade_history(limit: int = Query(20)):
             for t in trades
         ]
     }
+
+
+# ──── Price Refresh ────
+
+
+@app.post("/api/agent/refresh-prices")
+async def refresh_prices():
+    """Fetch current prices from Polymarket for all opportunities with market_ids."""
+    import httpx as _httpx
+
+    opps = pipeline_db.list_opportunities()
+    market_opps = [(opp.id, opp.market_id) for opp in opps if opp.market_id]
+    if not market_opps:
+        return {"updated": 0, "total": len(opps)}
+
+    updated = 0
+    async with _httpx.AsyncClient(base_url="https://gamma-api.polymarket.com", timeout=15) as client:
+        # Fetch all prices concurrently (batches of 10 to avoid overwhelming the API)
+        import asyncio as _asyncio
+
+        async def fetch_one(opp_id, market_id):
+            nonlocal updated
+            try:
+                resp = await client.get(f"/markets/{market_id}")
+                if resp.status_code == 200:
+                    m = resp.json()
+                    new_prices = m.get("outcomePrices")
+                    new_tokens = m.get("clobTokenIds")
+                    if new_prices:
+                        updates = {"outcome_prices": new_prices}
+                        if new_tokens:
+                            updates["token_ids"] = new_tokens
+                        pipeline_db.update_opportunity(opp_id, **updates)
+                        updated += 1
+            except Exception:
+                pass
+
+        # Process in batches of 10
+        for i in range(0, len(market_opps), 10):
+            batch = market_opps[i:i+10]
+            await _asyncio.gather(*(fetch_one(oid, mid) for oid, mid in batch))
+
+    return {"updated": updated, "total": len(opps)}
+
+
+# ──── Manual Trading ────
+
+
+@app.post("/api/agent/opportunities/{opp_id}/manual-trade")
+async def manual_trade(opp_id: str, request: Request):
+    """User manually buys Yes or No on an opportunity."""
+    body = await request.json()
+    side = body.get("side", "buy")
+    outcome = body.get("outcome", "Yes")
+    amount = float(body.get("amount_usd", 50.0))
+
+    opp = pipeline_db.get_opportunity(opp_id)
+    if not opp:
+        raise HTTPException(status_code=404, detail="Opportunity not found")
+    if not opp.outcome_prices or len(opp.outcome_prices) < 2:
+        raise HTTPException(status_code=400, detail="No price data available")
+    if not opp.token_ids or len(opp.token_ids) < 2:
+        raise HTTPException(status_code=400, detail="No token IDs available")
+
+    outcome_idx = 0 if outcome == "Yes" else 1
+    token_id = opp.token_ids[outcome_idx]
+    price = float(opp.outcome_prices[outcome_idx])
+    if price <= 0:
+        raise HTTPException(status_code=400, detail="Invalid price")
+
+    shares = amount / price
+    portfolio.record_buy(token_id, opp.market_question, outcome, shares, price, amount)
+    pipeline_db.update_opportunity(opp_id,
+        status="trade_executed",
+        trade_side="buy",
+        trade_outcome=outcome,
+        trade_amount_usd=amount,
+        trade_fill_price=price,
+        trade_fill_shares=shares,
+    )
+    pipeline_db.add_event("trade_executed", opportunity_id=opp_id, payload={
+        "side": "buy", "outcome": outcome, "shares": round(shares, 4),
+        "avg_price": round(price, 4), "total_cost": round(amount, 2),
+    })
+    return {"status": "executed", "side": "buy", "outcome": outcome,
+            "shares": round(shares, 4), "price": round(price, 4), "amount": round(amount, 2)}
+
+
+@app.post("/api/agent/portfolio/sell")
+async def sell_position(request: Request):
+    """Sell an open portfolio position."""
+    body = await request.json()
+    token_id = body.get("token_id")
+    if not token_id:
+        raise HTTPException(status_code=400, detail="token_id required")
+
+    position = portfolio.get_position(token_id)
+    if not position:
+        raise HTTPException(status_code=404, detail="No position found")
+
+    # Find current price from the matching opportunity
+    sell_price = position.avg_cost
+    opps = pipeline_db.list_opportunities()
+    for opp in opps:
+        if opp.token_ids and token_id in opp.token_ids:
+            idx = opp.token_ids.index(token_id)
+            if opp.outcome_prices and len(opp.outcome_prices) > idx:
+                sell_price = float(opp.outcome_prices[idx])
+            break
+
+    shares = position.shares
+    proceeds = shares * sell_price
+    portfolio.record_sell(token_id, shares, sell_price, proceeds)
+
+    return {"status": "sold", "token_id": token_id, "shares": round(shares, 4),
+            "price": round(sell_price, 4), "proceeds": round(proceeds, 2)}
 
 
 # ──── SSE Event Stream ────

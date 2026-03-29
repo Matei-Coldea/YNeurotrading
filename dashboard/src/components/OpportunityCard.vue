@@ -18,7 +18,7 @@
         <span class="price-label">No</span>
         <span class="price-value font-mono">${{ formatPrice(opp.outcome_prices?.[1]) }}</span>
       </div>
-      <div v-if="opp.estimated_edge != null" class="price-item">
+      <div v-if="opp.estimated_edge != null && opp.estimated_edge !== 0" class="price-item">
         <span class="price-label">Edge</span>
         <span class="price-value font-mono" :class="opp.estimated_edge > 0 ? 'text-green' : 'text-red'">
           {{ opp.estimated_edge > 0 ? '+' : '' }}{{ (opp.estimated_edge * 100).toFixed(1) }}pp
@@ -29,6 +29,7 @@
     <p v-if="opp.agent_hypothesis" class="hypothesis">{{ truncate(opp.agent_hypothesis, 120) }}</p>
     <p v-if="opp.simulation_rationale" class="sim-rationale">{{ truncate(opp.simulation_rationale, 100) }}</p>
 
+    <!-- Workflow actions -->
     <div class="card-actions" @click.stop>
       <button
         v-if="(opp.status === 'discovered' && opp.simulation_potential >= 3) || opp.status === 'simulation_running'"
@@ -44,20 +45,44 @@
       >
         Analyze Trade
       </button>
-      <button
-        v-if="opp.status === 'trade_proposed'"
-        class="btn btn-success btn-sm"
-        @click="$emit('approve-trade', opp.id)"
-      >
-        Approve Trade
-      </button>
-      <button
-        v-if="opp.status === 'trade_proposed'"
-        class="btn btn-danger btn-sm"
-        @click="$emit('reject-trade', opp.id)"
-      >
-        Reject
-      </button>
+      <template v-if="opp.status === 'trade_proposed'">
+        <button v-if="opp.trade_side !== 'skip'" class="btn btn-sm btn-outline" @click="$emit('approve-trade', opp.id)">
+          Approve Agent Rec.
+        </button>
+        <span v-else class="rec-label">Agent: No trade</span>
+        <button class="btn btn-sm btn-outline-dim" @click="$emit('reject-trade', opp.id)">Dismiss</button>
+      </template>
+    </div>
+
+    <!-- Trade buttons — Polymarket-style Yes/No -->
+    <div v-if="opp.outcome_prices?.length >= 2" class="trade-section" @click.stop>
+      <div class="amount-row">
+        <span class="amount-label">Amount</span>
+        <div class="amount-presets">
+          <button v-for="a in [10, 25, 50, 100]" :key="a"
+            class="preset-btn" :class="{ active: tradeAmount === a }"
+            @click="tradeAmount = a"
+          >${{ a }}</button>
+        </div>
+        <div class="amount-input-wrap">
+          <span class="amount-sign">$</span>
+          <input type="number" v-model.number="tradeAmount" min="1" class="amount-input font-mono" @click.stop />
+        </div>
+      </div>
+      <div class="trade-pair">
+        <button class="trade-btn trade-yes" @click="$emit('manual-trade', { id: opp.id, outcome: 'Yes', amount: tradeAmount })">
+          Buy Yes <span class="trade-price font-mono">${{ parseFloat(opp.outcome_prices[0]).toFixed(2) }}</span>
+        </button>
+        <button class="trade-btn trade-no" @click="$emit('manual-trade', { id: opp.id, outcome: 'No', amount: tradeAmount })">
+          Buy No <span class="trade-price font-mono">${{ parseFloat(opp.outcome_prices[1]).toFixed(2) }}</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Executed fill -->
+    <div v-if="opp.status === 'trade_executed' && opp.trade_fill_price && opp.trade_side !== 'skip'" class="fill-row" @click.stop>
+      <span class="fill-label">Filled</span>
+      <span class="fill-detail font-mono">{{ opp.trade_fill_shares?.toFixed(1) }} shares @ ${{ opp.trade_fill_price?.toFixed(3) }}</span>
     </div>
 
     <div class="card-meta">
@@ -68,13 +93,15 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { ref, computed } from 'vue'
 
 const props = defineProps({
   opp: { type: Object, required: true },
 })
 
-defineEmits(['select', 'start-simulation', 'analyze-report', 'approve-trade', 'reject-trade'])
+const tradeAmount = ref(50)
+
+defineEmits(['select', 'start-simulation', 'analyze-report', 'approve-trade', 'reject-trade', 'manual-trade'])
 
 const statusBadgeClass = computed(() => {
   const map = {
@@ -139,19 +166,9 @@ function truncate(s, len) {
   justify-content: space-between;
   margin-bottom: 8px;
 }
-.sim-potential {
-  display: flex;
-  gap: 3px;
-}
-.dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--border-light);
-}
-.dot.filled {
-  background: var(--yellow);
-}
+.sim-potential { display: flex; gap: 3px; }
+.dot { width: 6px; height: 6px; border-radius: 50%; background: var(--border-light); }
+.dot.filled { background: var(--yellow); }
 .market-question {
   font-size: 15px;
   font-weight: 600;
@@ -159,47 +176,139 @@ function truncate(s, len) {
   margin-bottom: 10px;
   line-height: 1.35;
 }
-.prices {
+.prices { display: flex; gap: 16px; margin-bottom: 10px; }
+.price-item { display: flex; flex-direction: column; gap: 2px; }
+.price-label { font-size: 11px; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.5px; }
+.price-value { font-size: 16px; font-weight: 600; }
+.hypothesis { font-size: 13px; color: var(--text-secondary); margin-bottom: 6px; line-height: 1.4; }
+.sim-rationale { font-size: 12px; color: var(--text-muted); font-style: italic; margin-bottom: 10px; }
+
+/* Workflow actions row */
+.card-actions {
   display: flex;
-  gap: 16px;
+  align-items: center;
+  gap: 8px;
   margin-bottom: 10px;
+  flex-wrap: wrap;
 }
-.price-item {
+.btn-outline {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.btn-outline:hover { background: var(--bg-secondary); }
+.btn-outline-dim {
+  background: none;
+  border: 1px solid var(--border-light);
+  color: var(--text-muted);
+  font-size: 12px;
+}
+.btn-outline-dim:hover { background: var(--bg-secondary); }
+.rec-label {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+/* Trade section */
+.trade-section { margin-bottom: 10px; }
+.amount-row {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
 }
-.price-label {
+.amount-label {
   font-size: 11px;
   text-transform: uppercase;
   color: var(--text-muted);
   letter-spacing: 0.5px;
 }
-.price-value {
-  font-size: 16px;
-  font-weight: 600;
-}
-.hypothesis {
-  font-size: 13px;
+.amount-presets { display: flex; gap: 4px; }
+.preset-btn {
+  padding: 3px 8px;
+  font-size: 11px;
+  font-family: var(--font-mono);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-primary);
   color: var(--text-secondary);
-  margin-bottom: 6px;
-  line-height: 1.4;
+  cursor: pointer;
 }
-.sim-rationale {
+.preset-btn:hover { background: var(--bg-secondary); }
+.preset-btn.active {
+  background: var(--text-primary);
+  color: var(--bg-primary);
+  border-color: var(--text-primary);
+}
+.amount-input-wrap {
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0 6px;
+  margin-left: auto;
+}
+.amount-sign { font-size: 12px; color: var(--text-muted); }
+.amount-input {
+  width: 50px;
+  border: none;
+  outline: none;
   font-size: 12px;
-  color: var(--text-muted);
-  font-style: italic;
-  margin-bottom: 10px;
+  padding: 3px 2px;
+  background: transparent;
+  color: var(--text-primary);
 }
-.card-actions {
+.amount-input::-webkit-inner-spin-button { -webkit-appearance: none; }
+
+/* Trade Yes/No pair */
+.trade-pair {
   display: flex;
   gap: 8px;
-  margin-bottom: 8px;
+  margin-bottom: 10px;
 }
-.card-meta {
+.trade-btn {
+  flex: 1;
   display: flex;
-  gap: 12px;
-  font-size: 11px;
-  color: var(--text-muted);
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 0;
+  border-radius: var(--radius);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+  border: 1.5px solid;
 }
+.trade-yes {
+  background: var(--green-dim);
+  border-color: var(--green);
+  color: #2e7d32;
+}
+.trade-yes:hover { background: var(--green); color: #fff; }
+.trade-no {
+  background: var(--red-dim);
+  border-color: var(--red);
+  color: #c62828;
+}
+.trade-no:hover { background: var(--red); color: #fff; }
+.trade-price { font-size: 12px; opacity: 0.8; }
+
+/* Fill row */
+.fill-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: var(--green-dim);
+  border-radius: var(--radius-sm);
+  margin-bottom: 10px;
+  font-size: 12px;
+}
+.fill-label { color: var(--green); font-weight: 600; }
+.fill-detail { color: var(--text-secondary); }
+
+.card-meta { display: flex; gap: 12px; font-size: 11px; color: var(--text-muted); }
 </style>
