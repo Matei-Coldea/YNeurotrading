@@ -25,7 +25,14 @@ from pipeline_db import PipelineDB
 from mcp_servers.polymarket_server import polymarket_all_tools
 from mcp_servers.paper_trading_server import paper_trading_all_tools, buy, sell, portfolio as paper_portfolio
 from mcp_servers.web_search import web_search
-from prompts.main_agent import SCAN_SYSTEM_PROMPT, TRADE_PROPOSAL_PROMPT
+from prompts.main_agent import (
+    SCAN_SYSTEM_PROMPT, TRADE_PROPOSAL_PROMPT,
+    TRADE_PROPOSAL_PROMPT_DIRECT,
+)
+from prompts.simulation_prompts import (
+    SEED_GENERATION_PROMPT_DIRECT,
+    SEED_GENERATION_PROMPT_FALLBACK,
+)
 from config import MIROFISH_API_URL
 
 # Load .env
@@ -94,13 +101,21 @@ async def run_scan(db: PipelineDB, req: ScanRequest | None = None) -> int:
         model=MODEL,
     )
 
-    prompt = "Scan Polymarket for prediction markets where social simulation would give us a trading edge."
+    prompt = (
+        "Scan Polymarket for prediction markets where social simulation provides a trading edge. "
+        "Execute at least 3 separate searches: browse Politics markets, browse Culture/Pop Culture markets, "
+        "and search for opinion-driven markets (approval, boycott, regulation, public opinion, poll). "
+        "For each market, classify it as 'direct' or 'indirect' simulation category. "
+        "Apply the volume minimums from your instructions."
+    )
     if req and req.tags:
-        prompt += f" Focus on these categories: {', '.join(req.tags)}."
+        prompt += f" Focus especially on these categories: {', '.join(req.tags)}."
     if req and req.query:
         prompt += f" Also search for: {req.query}."
     if req and req.limit:
         prompt += f" Find up to {req.limit} markets."
+    else:
+        prompt += " Find 8-15 markets total."
 
     db.add_event("scan_started", payload={"prompt": prompt})
 
@@ -139,6 +154,7 @@ async def run_scan(db: PipelineDB, req: ScanRequest | None = None) -> int:
             estimated_edge=obj.get("estimated_edge"),
             simulation_rationale=obj.get("simulation_rationale"),
             simulation_potential=obj.get("simulation_potential"),
+            simulation_category=obj.get("simulation_category"),
             web_research_summary=obj.get("web_research_summary"),
         )
         db.create_opportunity(opp)
@@ -317,25 +333,30 @@ async def _generate_seed_and_prompt(opp: Opportunity) -> tuple[str, str]:
     """Use the LLM to generate a seed document and simulation requirement from market context."""
     _ensure_client()
 
-    prompt = f"""Generate a seed document and simulation requirement for a social simulation about this prediction market.
+    # Select category-specific prompt
+    if opp.simulation_category == "direct":
+        prompt_template = SEED_GENERATION_PROMPT_DIRECT
+    else:
+        prompt_template = SEED_GENERATION_PROMPT_FALLBACK
 
-Market Question: {opp.market_question}
-Market Description: {opp.market_description or 'N/A'}
-Agent Hypothesis: {opp.agent_hypothesis or 'N/A'}
-Web Research: {opp.web_research_summary or 'N/A'}
-Tags: {', '.join(opp.tags) if opp.tags else 'N/A'}
+    yes_price = opp.outcome_prices[0] if opp.outcome_prices and len(opp.outcome_prices) > 0 else "N/A"
+    no_price = opp.outcome_prices[1] if opp.outcome_prices and len(opp.outcome_prices) > 1 else "N/A"
 
-Output a JSON object with two fields:
-- "seed_document": A 200-500 word news article describing the event/topic. Write it as a factual news piece that captures the key facts, stakeholders, and controversy.
-- "simulation_requirement": A prompt for MiroFish describing what to simulate. Include: what platforms to simulate (Twitter), what mix of agents (60-70% individuals, 30-40% organizations/media), what behaviors to watch for, and how long to simulate (24-48 hours).
-
-Output ONLY the JSON object, nothing else."""
+    prompt = prompt_template.format(
+        market_question=opp.market_question,
+        market_description=opp.market_description or "N/A",
+        yes_price=yes_price,
+        no_price=no_price,
+        tags=", ".join(opp.tags) if opp.tags else "N/A",
+        web_research=opp.web_research_summary or "N/A",
+        hypothesis=opp.agent_hypothesis or "N/A",
+    )
 
     client = AsyncOpenAI(api_key=API_KEY, base_url=BASE_URL)
     response = await client.chat.completions.create(
         model=MODEL,
         messages=[{"role": "user", "content": prompt}],
-        temperature=0.7,
+        temperature=0.8,
     )
 
     text = response.choices[0].message.content
@@ -359,13 +380,19 @@ async def _generate_trade_proposal(db: PipelineDB, opp_id: str, report_text: str
 
     _ensure_client()
 
+    # Select category-specific trade proposal prompt
+    if opp.simulation_category == "direct":
+        prompt_template = TRADE_PROPOSAL_PROMPT_DIRECT
+    else:
+        prompt_template = TRADE_PROPOSAL_PROMPT  # generic fallback
+
     yes_price = opp.outcome_prices[0] if opp.outcome_prices and len(opp.outcome_prices) > 0 else "N/A"
     no_price = opp.outcome_prices[1] if opp.outcome_prices and len(opp.outcome_prices) > 1 else "N/A"
     yes_token = opp.token_ids[0] if opp.token_ids and len(opp.token_ids) > 0 else "N/A"
     no_token = opp.token_ids[1] if opp.token_ids and len(opp.token_ids) > 1 else "N/A"
 
-    prompt = TRADE_PROPOSAL_PROMPT.format(
-        simulation_report=report_text[:3000],  # Truncate to avoid token limits
+    prompt = prompt_template.format(
+        simulation_report=report_text[:6000],  # Increased from 3000 for richer analysis
         market_question=opp.market_question,
         yes_price=yes_price,
         no_price=no_price,
@@ -378,7 +405,7 @@ async def _generate_trade_proposal(db: PipelineDB, opp_id: str, report_text: str
     response = await client.chat.completions.create(
         model=MODEL,
         messages=[{"role": "user", "content": prompt}],
-        temperature=0.3,
+        temperature=0.2,
     )
 
     text = response.choices[0].message.content

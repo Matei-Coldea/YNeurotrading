@@ -25,6 +25,7 @@ class Opportunity(BaseModel):
     estimated_edge: float | None = None
     simulation_rationale: str | None = None
     simulation_potential: int | None = None  # 1-5
+    simulation_category: str | None = None  # "direct" or "indirect"
     # MiroFish simulation
     seed_document: str | None = None
     simulation_requirement: str | None = None

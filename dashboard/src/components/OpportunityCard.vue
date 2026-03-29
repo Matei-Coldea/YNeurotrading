@@ -1,7 +1,12 @@
 <template>
   <div class="opp-card card" @click="$emit('select', opp.id)">
     <div class="card-header">
-      <span class="badge" :class="statusBadgeClass">{{ statusLabel }}</span>
+      <div class="header-badges">
+        <span class="badge" :class="statusBadgeClass">{{ statusLabel }}</span>
+        <span v-if="opp.simulation_category" class="badge sim-category-badge" :class="simCategoryClass" :title="simCategoryTooltip">
+          {{ simCategoryLabel }}
+        </span>
+      </div>
       <span v-if="opp.simulation_potential" class="sim-potential" :title="`Simulation potential: ${opp.simulation_potential}/5`">
         <span v-for="i in 5" :key="i" class="dot" :class="{ filled: i <= opp.simulation_potential }"></span>
       </span>
@@ -103,6 +108,22 @@ const tradeAmount = ref(50)
 
 defineEmits(['select', 'start-simulation', 'analyze-report', 'approve-trade', 'reject-trade', 'manual-trade'])
 
+const simCategoryLabel = computed(() => {
+  if (props.opp.simulation_category === 'direct') return 'Opinion → Outcome'
+  return ''
+})
+
+const simCategoryClass = computed(() => {
+  if (props.opp.simulation_category === 'direct') return 'badge-cyan'
+  return ''
+})
+
+const simCategoryTooltip = computed(() => {
+  if (props.opp.simulation_category === 'direct')
+    return 'Public opinion determines the outcome — simulation directly predicts the result'
+  return ''
+})
+
 const statusBadgeClass = computed(() => {
   const map = {
     discovered: 'badge-blue',
@@ -165,6 +186,22 @@ function truncate(s, len) {
   align-items: center;
   justify-content: space-between;
   margin-bottom: 8px;
+}
+.header-badges {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.sim-category-badge {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  cursor: help;
+}
+.badge-cyan {
+  background: rgba(0, 188, 212, 0.12);
+  color: #00acc1;
+  border: 1px solid rgba(0, 188, 212, 0.25);
 }
 .sim-potential { display: flex; gap: 3px; }
 .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--border-light); }

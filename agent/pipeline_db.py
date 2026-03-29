@@ -13,6 +13,7 @@ class PipelineDB:
         DATA_DIR.mkdir(parents=True, exist_ok=True)
         self.db_path = db_path
         self._init_db()
+        self._migrate_db()
 
     def _conn(self) -> sqlite3.Connection:
         conn = sqlite3.connect(str(self.db_path))
@@ -41,6 +42,7 @@ class PipelineDB:
                     estimated_edge REAL,
                     simulation_rationale TEXT,
                     simulation_potential INTEGER,
+                    simulation_category TEXT,
                     seed_document TEXT,
                     simulation_requirement TEXT,
                     mirofish_project_id TEXT,
@@ -70,6 +72,12 @@ class PipelineDB:
                 )
             """)
 
+    def _migrate_db(self):
+        with self._conn() as conn:
+            columns = {row[1] for row in conn.execute("PRAGMA table_info(opportunities)").fetchall()}
+            if "simulation_category" not in columns:
+                conn.execute("ALTER TABLE opportunities ADD COLUMN simulation_category TEXT")
+
     # --- Opportunities ---
 
     def create_opportunity(self, opp: Opportunity) -> Opportunity:
@@ -83,8 +91,9 @@ class PipelineDB:
                     outcomes, outcome_prices, token_ids, volume, liquidity,
                     end_date, tags, agent_hypothesis, probability_estimate,
                     market_price, estimated_edge, simulation_rationale,
-                    simulation_potential, web_research_summary, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    simulation_potential, simulation_category,
+                    web_research_summary, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     opp.id, opp.status, opp.market_id, opp.market_question,
                     opp.market_description,
@@ -96,6 +105,7 @@ class PipelineDB:
                     opp.agent_hypothesis, opp.probability_estimate,
                     opp.market_price, opp.estimated_edge,
                     opp.simulation_rationale, opp.simulation_potential,
+                    opp.simulation_category,
                     opp.web_research_summary, now, now,
                 ),
             )
@@ -114,12 +124,23 @@ class PipelineDB:
         with self._conn() as conn:
             if status:
                 rows = conn.execute(
-                    "SELECT * FROM opportunities WHERE status = ? ORDER BY simulation_potential DESC NULLS LAST, created_at DESC",
+                    """SELECT * FROM opportunities WHERE status = ?
+                       ORDER BY
+                         CASE WHEN simulation_category IS NOT NULL THEN 0 ELSE 1 END,
+                         simulation_potential DESC NULLS LAST,
+                         volume DESC NULLS LAST,
+                         created_at DESC""",
                     (status,),
                 ).fetchall()
             else:
                 rows = conn.execute(
-                    "SELECT * FROM opportunities ORDER BY simulation_potential DESC NULLS LAST, created_at DESC"
+                    """SELECT * FROM opportunities
+                       ORDER BY
+                         CASE WHEN status = 'discovered' THEN 0 ELSE 1 END,
+                         CASE WHEN simulation_category IS NOT NULL THEN 0 ELSE 1 END,
+                         simulation_potential DESC NULLS LAST,
+                         volume DESC NULLS LAST,
+                         created_at DESC"""
                 ).fetchall()
             return [self._row_to_opportunity(r) for r in rows]
 
