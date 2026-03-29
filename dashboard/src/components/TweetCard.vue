@@ -10,6 +10,7 @@
       <div class="tweet-content">
         <div class="tweet-author">
           <span class="author-name">{{ displayName }}</span>
+          <span v-if="tweet.generated_by === 'hermes'" class="hermes-badge" title="Agent powered by Nous Research Hermes">Hermes</span>
           <span class="author-handle text-muted">@{{ handle }}</span>
         </div>
         <p class="tweet-text">{{ tweet.content }}</p>
@@ -93,6 +94,15 @@ const avatarColor = computed(() => {
   font-size: 13px;
   font-weight: 600;
   color: var(--text-primary);
+}
+.hermes-badge {
+  font-size: 9px;
+  font-weight: 700;
+  color: #a855f7;
+  background: rgba(168, 85, 247, 0.12);
+  padding: 1px 5px;
+  border-radius: 8px;
+  white-space: nowrap;
 }
 .author-handle {
   font-size: 12px;

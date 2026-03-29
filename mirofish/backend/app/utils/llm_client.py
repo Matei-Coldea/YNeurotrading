@@ -5,6 +5,7 @@ Supports Ollama num_ctx parameter to prevent prompt truncation
 """
 
 import json
+import logging
 import os
 import re
 from typing import Optional, Dict, Any, List
@@ -118,3 +119,26 @@ class LLMClient:
             return json.loads(cleaned_response)
         except json.JSONDecodeError:
             raise ValueError(f"Invalid JSON format from LLM: {cleaned_response}")
+
+
+class HermesClient(LLMClient):
+    """LLM Client for Nous Research Hermes — used for humanistic persona generation.
+
+    Falls back to the default LLM config if HERMES_API_KEY is not set.
+    """
+
+    _hermes_logger = logging.getLogger('mirofish.hermes')
+
+    def __init__(self, timeout: float = 300.0):
+        super().__init__(
+            api_key=Config.HERMES_API_KEY or Config.LLM_API_KEY,
+            base_url=Config.HERMES_BASE_URL if Config.HERMES_API_KEY else Config.LLM_BASE_URL,
+            model=Config.HERMES_MODEL_NAME if Config.HERMES_API_KEY else Config.LLM_MODEL_NAME,
+            timeout=timeout,
+        )
+        self.using_hermes = bool(Config.HERMES_API_KEY)
+
+    def chat(self, messages, **kwargs):
+        tag = "Hermes" if self.using_hermes else "LLM-fallback"
+        self._hermes_logger.info(f"[{tag}] Generating with model={self.model}")
+        return super().chat(messages, **kwargs)
