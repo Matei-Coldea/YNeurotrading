@@ -49,6 +49,12 @@ API_KEY = os.getenv("LLM_API_KEY", "")
 BASE_URL = os.getenv("LLM_BASE_URL", "https://api.openai.com/v1")
 MODEL = os.getenv("LLM_MODEL_NAME", "gpt-4.1")
 
+# K2 reasoning model by MBZUAI — used for final trade/simulation analysis
+K2_API_KEY = os.getenv("K2_API_KEY", "")
+K2_BASE_URL = os.getenv("K2_BASE_URL", "")
+K2_MODEL = os.getenv("K2_MODEL_NAME", "")
+K2_REASONING_EFFORT = os.getenv("K2_REASONING_EFFORT", "high")  # low/medium/high
+
 _client_initialized = False
 
 
@@ -435,15 +441,27 @@ async def _generate_trade_proposal(db: PipelineDB, opp_id: str, report_text: str
             })
             return
 
-    # Single-provider fallback
-    client = AsyncOpenAI(api_key=API_KEY, base_url=BASE_URL)
-    response = await client.chat.completions.create(
-        model=MODEL,
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0.2,
-    )
+    # Use K2 reasoning model if configured, else fall back to default LLM
+    if K2_API_KEY and K2_BASE_URL and K2_MODEL:
+        client = AsyncOpenAI(api_key=K2_API_KEY, base_url=K2_BASE_URL)
+        response = await client.chat.completions.create(
+            model=K2_MODEL,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.2,
+            extra_body={"chat_template_kwargs": {"reasoning_effort": K2_REASONING_EFFORT}},
+        )
+    else:
+        client = AsyncOpenAI(api_key=API_KEY, base_url=BASE_URL)
+        response = await client.chat.completions.create(
+            model=MODEL,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.2,
+        )
 
     text = response.choices[0].message.content
+    # K2 may include <think>...</think> reasoning blocks — strip them for JSON parsing
+    import re as _re
+    text = _re.sub(r'<think>[\s\S]*?</think>', '', text).strip()
     objects = _parse_json_objects(text)
     if not objects:
         db.add_event("error", opportunity_id=opp_id, payload={"message": "Failed to parse trade proposal"})
