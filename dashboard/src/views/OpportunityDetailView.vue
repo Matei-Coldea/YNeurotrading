@@ -51,12 +51,6 @@
               <span class="price-label">Agent Est.</span>
               <span class="price-val font-mono">{{ opp.probability_estimate != null ? (opp.probability_estimate * 100).toFixed(1) + '%' : '—' }}</span>
             </div>
-            <div v-if="opp.estimated_edge != null" class="price-box">
-              <span class="price-label">Edge</span>
-              <span class="price-val font-mono" :class="opp.estimated_edge > 0 ? 'text-green' : 'text-red'">
-                {{ opp.estimated_edge > 0 ? '+' : '' }}{{ (opp.estimated_edge * 100).toFixed(1) }}pp
-              </span>
-            </div>
           </div>
 
           <div class="meta-row">

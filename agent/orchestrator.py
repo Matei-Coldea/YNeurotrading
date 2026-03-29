@@ -128,12 +128,25 @@ async def run_scan(db: PipelineDB, req: ScanRequest | None = None) -> int:
     existing_opps = db.list_opportunities()
     existing_market_ids = {opp.market_id for opp in existing_opps if opp.market_id}
     existing_questions = {opp.market_question.strip().lower() for opp in existing_opps}
+    # Filter out markets containing blocked keywords
+    import re
+    BLOCKED_PATTERNS = [
+        re.compile(r'\biran\b', re.IGNORECASE),
+        re.compile(r'\brussia\b', re.IGNORECASE),
+        re.compile(r'\btrump\b', re.IGNORECASE),
+        re.compile(r'\bputin\b', re.IGNORECASE),
+        re.compile(r'\bnetanyahu\b', re.IGNORECASE),
+        re.compile(r'\bisrael\b', re.IGNORECASE),
+        re.compile(r'\bU\.?S\.?\b'),
+    ]
     for obj in json_objects:
         if "market_question" not in obj:
             continue
         market_id = obj.get("market_id", "")
         question = obj["market_question"].strip().lower()
         if (market_id and market_id in existing_market_ids) or question in existing_questions:
+            continue
+        if any(p.search(obj["market_question"]) for p in BLOCKED_PATTERNS):
             continue
         opp_id = f"opp_{uuid.uuid4().hex[:8]}"
         opp = Opportunity(
@@ -299,6 +312,7 @@ async def analyze_report(db: PipelineDB, opp_id: str) -> dict:
         if resp.status_code == 200:
             report_data = resp.json()
             report_data = report_data.get("data", report_data) if isinstance(report_data, dict) else report_data
+            report_id = report_data.get("report_id", "")
             # Full markdown content is the best source
             if report_data.get("markdown_content"):
                 report_text = report_data["markdown_content"]
@@ -309,6 +323,22 @@ async def analyze_report(db: PipelineDB, opp_id: str) -> dict:
             elif "sections" in report_data:
                 for section in report_data["sections"]:
                     report_text += section.get("content", "") + "\n\n"
+
+            # Fall back to agent logs (MiroFish stores section content in
+            # streaming logs even when the report record isn't fully saved)
+            if not report_text.strip() and report_id:
+                log_resp = await client.get(f"/api/report/{report_id}/agent-log/stream")
+                if log_resp.status_code == 200:
+                    log_data = log_resp.json()
+                    logs = log_data.get("data", {}).get("logs", [])
+                    sections = []
+                    for log in logs:
+                        if log.get("action") == "section_complete":
+                            content = log.get("details", {}).get("content", "")
+                            if content:
+                                sections.append(content)
+                    if sections:
+                        report_text = "\n\n".join(sections)
 
     if not report_text:
         raise ValueError("Could not fetch report from MiroFish. Generate the report in MiroFish first.")
