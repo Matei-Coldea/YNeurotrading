@@ -61,22 +61,6 @@
         </div>
       </section>
 
-      <!-- Sentiment -->
-      <section v-if="opp.simulation_sentiment" class="trade-section">
-        <h2>Sentiment Analysis</h2>
-        <div class="card">
-          <div class="sentiment-bars">
-            <div v-for="(val, key) in opp.simulation_sentiment" :key="key" class="sent-row">
-              <span class="sent-label">{{ key }}</span>
-              <div class="sent-track">
-                <div class="sent-fill" :class="sentColor(key)" :style="{ width: (val * 100) + '%' }"></div>
-              </div>
-              <span class="sent-val font-mono">{{ (val * 100).toFixed(0) }}%</span>
-            </div>
-          </div>
-        </div>
-      </section>
-
       <!-- Trade Proposal -->
       <section v-if="opp.trade_reasoning" class="trade-section">
         <h2>Trade Recommendation</h2>
@@ -205,10 +189,6 @@ function openInIframe(url) {
 }
 
 function formatPrice(p) { return p ? parseFloat(p).toFixed(2) : '—' }
-function sentColor(key) {
-  return { bullish: 'fill-green', bearish: 'fill-red', neutral: 'fill-yellow', positive: 'fill-green', negative: 'fill-red' }[key.toLowerCase()] || 'fill-blue'
-}
-
 onMounted(load)
 </script>
 
@@ -274,17 +254,6 @@ onMounted(load)
 .report-rendered :deep(li) { margin-bottom: 4px; }
 .report-rendered :deep(strong) { color: var(--text-primary); }
 .report-rendered :deep(blockquote) { border-left: 3px solid var(--border); padding-left: 12px; color: var(--text-muted); margin: 8px 0; }
-
-.sentiment-bars { display: flex; flex-direction: column; gap: 8px; }
-.sent-row { display: flex; align-items: center; gap: 10px; }
-.sent-label { width: 70px; font-size: 12px; text-transform: capitalize; color: var(--text-secondary); }
-.sent-track { flex: 1; height: 10px; background: var(--bg-secondary); border-radius: 5px; overflow: hidden; }
-.sent-fill { height: 100%; border-radius: 5px; transition: width 0.5s; }
-.fill-green { background: var(--green); }
-.fill-red { background: var(--red); }
-.fill-yellow { background: var(--yellow); }
-.fill-blue { background: var(--accent); }
-.sent-val { width: 35px; text-align: right; font-size: 12px; }
 
 .reasoning { font-size: 14px; line-height: 1.6; color: var(--text-secondary); margin-bottom: 12px; }
 .trade-box { display: flex; gap: 12px; padding: 12px; background: var(--bg-secondary); border-radius: var(--radius); font-weight: 600; font-size: 15px; align-items: center; }
