@@ -43,7 +43,16 @@ async def _neural_perform_action_by_llm(self):
         neural_state = await get_neural_state(narrative, self._fmri_session)
         if neural_state:
             self.system_message.content = (
-                f"{original_content}\n\n{neural_state}"
+                f"{original_content}\n\n"
+                "[The following is a neural-cognitive reading of your internal "
+                "state as you consume the posts in your feed. It captures your "
+                "gut-level emotional reactions, instincts, and cognitive patterns "
+                "— things you feel but would never articulate in technical terms. "
+                "Use this data to inform your emotional tone, decisions, and "
+                "behavior, but NEVER reference the analysis itself in your "
+                "response. Respond naturally as a human who simply feels these "
+                "things without knowing why.]\n\n"
+                f"{neural_state}"
             )
 
     # 3. Build user message and call LLM (mirrors original OASIS logic)
