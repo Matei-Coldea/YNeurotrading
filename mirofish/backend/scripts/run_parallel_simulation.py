@@ -156,8 +156,6 @@ def init_logging_for_simulation(simulation_dir: str):
 
 
 from action_logger import SimulationLogManager, PlatformActionLogger
-from neural_agent import patch_agent_with_fmri
-from fmri_client import warmup as fmri_warmup
 
 try:
     from camel.models import ModelFactory
@@ -1098,7 +1096,6 @@ class PlatformSimulation:
         self.env = None
         self.agent_graph = None
         self.total_actions = 0
-        self.fmri_enabled = False
 
 
 async def run_twitter_simulation(
@@ -1144,32 +1141,13 @@ async def run_twitter_simulation(
         available_actions=TWITTER_ACTIONS,
     )
     
-    # Patch agents with fMRI neural state injection
-    fmri_enabled = os.getenv("FMRI_ENABLED", "").lower() == "true"
-    print(f"[fMRI] FMRI_ENABLED={os.getenv('FMRI_ENABLED')!r} → fmri_enabled={fmri_enabled}", flush=True)
-    if fmri_enabled:
-        log_info("Warming up fMRI server...")
-        server_ok = await fmri_warmup()
-        if not server_ok:
-            log_info("WARNING: fMRI server unreachable — continuing without neural grounding")
-        else:
-            patched = 0
-            for agent_id, agent in result.agent_graph.get_agents():
-                try:
-                    patch_agent_with_fmri(agent)
-                    patched += 1
-                except Exception:
-                    pass
-            result.fmri_enabled = True
-            log_info(f"fMRI integration enabled: patched {patched} agents")
-
     # Get Agent real name mapping from config (use entity_name instead of default Agent_X)
     agent_names = get_agent_names_from_config(config)
     # If an agent is not in config, use OASIS default name
     for agent_id, agent in result.agent_graph.get_agents():
         if agent_id not in agent_names:
             agent_names[agent_id] = getattr(agent, 'name', f'Agent_{agent_id}')
-
+    
     db_path = os.path.join(simulation_dir, "twitter_simulation.db")
     if os.path.exists(db_path):
         os.remove(db_path)
@@ -1658,7 +1636,7 @@ async def main():
     if twitter_result and twitter_result.env:
         await twitter_result.env.close()
         log_manager.info("[Twitter] Environment closed")
-
+    
     if reddit_result and reddit_result.env:
         await reddit_result.env.close()
         log_manager.info("[Reddit] Environment closed")
