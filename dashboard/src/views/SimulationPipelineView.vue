@@ -52,13 +52,8 @@
               </span>
             </div>
             <div class="step-row">
-              <span class="step-icon" :class="{ done: !!opp?.mirofish_report_id, active: generatingReport }">
-                {{ opp?.mirofish_report_id ? '✓' : generatingReport ? '◉' : '○' }}
-              </span>
+              <span class="step-icon" :class="{ done: !!opp?.mirofish_report_id }">{{ opp?.mirofish_report_id ? '✓' : '○' }}</span>
               <span>Analysis Report</span>
-              <span v-if="generatingReport && reportProgress?.sections_done" class="step-detail font-mono">
-                {{ reportProgress.sections_done }}/{{ reportProgress.sections_total || '?' }}
-              </span>
             </div>
           </div>
 
@@ -142,7 +137,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { getOpportunity, startSimulation, syncMirofish } from '../api/agent'
-import { getRunStatus, getPostsFeed, generateReport, getReportGenerationStatus } from '../api/mirofish'
+import { getRunStatus, getPostsFeed } from '../api/mirofish'
 
 const props = defineProps({ id: String })
 const router = useRouter()
@@ -154,8 +149,6 @@ const showIframe = ref(false)
 const iframeUrl = ref(null)
 const simProgress = ref({})
 const recentPosts = ref([])
-const generatingReport = ref(false)
-const reportProgress = ref(null)
 let pollTimer = null
 
 const marketQuestion = computed(() => opp.value?.market_question || '')
@@ -284,49 +277,6 @@ async function fetchProgress() {
   // Stop polling once fully complete
   if (opp.value?.status === 'simulation_complete') {
     if (pollTimer) { clearInterval(pollTimer); pollTimer = null }
-  }
-}
-
-async function handleGenerateReport() {
-  const simId = opp.value?.mirofish_simulation_id
-  if (!simId) return
-
-  generatingReport.value = true
-  try {
-    const res = await generateReport(simId)
-    const data = res.data?.data || res.data
-    const taskId = data.task_id
-
-    // Poll for completion
-    if (taskId) {
-      while (true) {
-        await new Promise(r => setTimeout(r, 3000))
-        try {
-          const statusRes = await getReportGenerationStatus(taskId, simId)
-          const sd = statusRes.data?.data || statusRes.data
-          reportProgress.value = sd
-          if (['completed', 'complete', 'done'].includes(sd.status)) break
-          if (['failed', 'error'].includes(sd.status)) throw new Error('Report generation failed')
-        } catch (e) {
-          if (e.message === 'Report generation failed') throw e
-          break
-        }
-      }
-    }
-
-    // Sync to pick up report_id
-    await syncMirofish(props.id)
-    const oppRes = await getOpportunity(props.id)
-    opp.value = oppRes.data.opportunity
-
-    // Update iframe to show report
-    if (opp.value.mirofish_report_id) {
-      iframeUrl.value = `http://localhost:3000/report/${opp.value.mirofish_report_id}`
-    }
-  } catch (e) {
-    console.error('Report generation failed:', e)
-  } finally {
-    generatingReport.value = false
   }
 }
 
@@ -521,30 +471,6 @@ onUnmounted(() => {
 }
 .stat-label { color: var(--text-muted); }
 .stat-val { font-weight: 600; }
-
-/* Report generation */
-.report-gen {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 12px;
-  background: var(--yellow-dim, #fff8e1);
-  border: 1px solid var(--yellow, #FF9800);
-  border-radius: 6px;
-  font-size: 13px;
-  color: var(--text-secondary);
-  margin-bottom: 10px;
-}
-.spinner-sm {
-  display: inline-block;
-  width: 14px;
-  height: 14px;
-  border: 2px solid rgba(0,0,0,0.1);
-  border-top-color: var(--accent, #FF4500);
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-  flex-shrink: 0;
-}
 
 /* Open button */
 .open-btn { width: 100%; margin-bottom: 10px; }
