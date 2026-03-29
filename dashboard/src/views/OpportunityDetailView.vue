@@ -83,9 +83,9 @@
           <div class="report-preview">
             <div class="report-rendered" v-html="renderedReport"></div>
           </div>
-          <a v-if="opp.mirofish_report_id"
-             :href="`http://localhost:3000/report/${opp.mirofish_report_id}`"
-             target="_blank" class="report-full-link">Read full report →</a>
+          <button v-if="opp.mirofish_report_id"
+             class="report-full-link"
+             @click="openInIframe(`http://localhost:3000/report/${opp.mirofish_report_id}`)">Read full report →</button>
           <div v-if="opp.simulation_sentiment" class="sentiment-row">
             <div v-for="(val, key) in opp.simulation_sentiment" :key="key" class="sentiment-item">
               <span class="sentiment-label">{{ key }}</span>
@@ -162,6 +162,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { marked } from 'marked'
 import { getOpportunity, analyzeReport, approveTrade, rejectTrade, manualTrade } from '../api/agent'
+import { simIframe } from '../store/simulationIframe'
 
 const props = defineProps({ id: String })
 const router = useRouter()
@@ -233,6 +234,11 @@ async function handleManualTrade(outcome) {
   } catch (e) {
     console.error('Trade failed:', e)
   }
+}
+
+function openInIframe(url) {
+  simIframe.url = url
+  simIframe.visible = true
 }
 
 function formatPrice(p) { return p ? parseFloat(p).toFixed(2) : '—' }
@@ -322,10 +328,14 @@ onMounted(load)
 .report-full-link {
   display: inline-block;
   margin-top: 10px;
+  padding: 0;
+  border: none;
+  background: none;
   font-size: 13px;
   font-weight: 600;
   color: var(--accent);
-  text-decoration: none;
+  cursor: pointer;
+  font-family: inherit;
 }
 .report-full-link:hover { text-decoration: underline; }
 .report-rendered { font-size: 14px; line-height: 1.6; color: var(--text-secondary); }

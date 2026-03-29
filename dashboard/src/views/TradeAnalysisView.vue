@@ -37,15 +37,15 @@
 
       <!-- MiroFish Links -->
       <section class="trade-section links-row">
-        <a v-if="opp.mirofish_simulation_id" :href="`http://localhost:3000/y/${opp.mirofish_simulation_id}`" target="_blank" class="btn">
+        <button v-if="opp.mirofish_simulation_id" class="btn" @click="openInIframe(`http://localhost:3000/y/${opp.mirofish_simulation_id}`)">
           View Y.com Feed
-        </a>
-        <a v-if="opp.mirofish_report_id" :href="`http://localhost:3000/report/${opp.mirofish_report_id}`" target="_blank" class="btn">
+        </button>
+        <button v-if="opp.mirofish_report_id" class="btn" @click="openInIframe(`http://localhost:3000/report/${opp.mirofish_report_id}`)">
           View Full Report
-        </a>
-        <a v-if="opp.mirofish_project_id" :href="`http://localhost:3000/process/${opp.mirofish_project_id}`" target="_blank" class="btn">
+        </button>
+        <button v-if="opp.mirofish_project_id" class="btn" @click="openInIframe(`http://localhost:3000/process/${opp.mirofish_project_id}`)">
           View in MiroFish
-        </a>
+        </button>
       </section>
 
       <!-- Report Summary -->
@@ -55,9 +55,9 @@
           <div class="report-preview">
             <div class="report-rendered" v-html="renderedReport"></div>
           </div>
-          <a v-if="opp.mirofish_report_id"
-             :href="`http://localhost:3000/report/${opp.mirofish_report_id}`"
-             target="_blank" class="report-full-link">Read full report →</a>
+          <button v-if="opp.mirofish_report_id"
+             class="report-full-link"
+             @click="openInIframe(`http://localhost:3000/report/${opp.mirofish_report_id}`)">Read full report →</button>
         </div>
       </section>
 
@@ -150,6 +150,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { marked } from 'marked'
 import { getOpportunity, analyzeReport, approveTrade, rejectTrade, manualTrade } from '../api/agent'
+import { simIframe } from '../store/simulationIframe'
 
 const props = defineProps({ id: String })
 const router = useRouter()
@@ -196,6 +197,11 @@ async function doManualTrade(outcome) {
   } catch (e) {
     console.error('Trade failed:', e)
   }
+}
+
+function openInIframe(url) {
+  simIframe.url = url
+  simIframe.visible = true
 }
 
 function formatPrice(p) { return p ? parseFloat(p).toFixed(2) : '—' }
@@ -246,10 +252,14 @@ onMounted(load)
 .report-full-link {
   display: inline-block;
   margin-top: 10px;
+  padding: 0;
+  border: none;
+  background: none;
   font-size: 13px;
   font-weight: 600;
   color: var(--accent);
-  text-decoration: none;
+  cursor: pointer;
+  font-family: inherit;
 }
 .report-full-link:hover { text-decoration: underline; }
 .report-rendered { font-size: 14px; line-height: 1.6; color: var(--text-secondary); }

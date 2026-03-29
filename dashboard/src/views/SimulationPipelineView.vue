@@ -72,12 +72,10 @@
           </button>
 
           <div class="quick-links">
-            <a v-if="opp?.mirofish_simulation_id"
-               :href="`http://localhost:3000/y/${opp.mirofish_simulation_id}`"
-               target="_blank" class="link-btn">Live Feed ↗</a>
-            <a v-if="opp?.mirofish_report_id"
-               :href="`http://localhost:3000/report/${opp.mirofish_report_id}`"
-               target="_blank" class="link-btn">Report ↗</a>
+            <button v-if="opp?.mirofish_simulation_id"
+               class="link-btn" @click="openIframe(`http://localhost:3000/y/${opp.mirofish_simulation_id}`)">Live Feed</button>
+            <button v-if="opp?.mirofish_report_id"
+               class="link-btn" @click="openIframe(`http://localhost:3000/report/${opp.mirofish_report_id}`)">Report</button>
           </div>
         </div>
 
@@ -264,6 +262,11 @@ function enterFullscreen() {
   simIframe.visible = true
 }
 
+function openIframe(url) {
+  simIframe.url = url
+  simIframe.visible = true
+}
+
 async function goBack() {
   simIframe.visible = false
   try { await syncMirofish(props.id) } catch {}
@@ -408,7 +411,7 @@ onUnmounted(() => {
 
 /* Quick links */
 .quick-links { display: flex; gap: 12px; }
-.link-btn { font-size: 12px; color: var(--accent, #FF4500); text-decoration: none; }
+.link-btn { font-size: 12px; color: var(--accent, #FF4500); background: none; border: none; padding: 0; cursor: pointer; font-family: inherit; }
 .link-btn:hover { text-decoration: underline; }
 
 /* Market context */
