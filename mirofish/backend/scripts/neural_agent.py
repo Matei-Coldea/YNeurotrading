@@ -78,6 +78,7 @@ async def _neural_perform_action_by_llm(self):
             "Please perform social media actions after observing the "
             "platform environments. Notice that don't limit your "
             "actions for example to just like the posts. "
+            "Always write your posts and responses in English. "
             f"Here is your social media environment: {env_prompt}"
         ),
     )
