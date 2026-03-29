@@ -58,13 +58,12 @@ def main(data_dir: str) -> None:
         logger.error("HF_TOKEN not set — cannot load TRIBE model")
         return
 
-    from tribev2 import TribeModel
+    from tribev2.demo_utils import TribeModel
 
     logger.info("Loading TRIBE v2 model...")
     model = TribeModel.from_pretrained(
         "facebook/tribev2",
         cache_folder=str(data_path / "cache"),
-        token=hf_token,
     )
 
     import tempfile

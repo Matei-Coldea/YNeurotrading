@@ -1,6 +1,7 @@
 #!/bin/bash
 # RunPod setup script — installs all dependencies and generates cached data.
 # Idempotent: safe to re-run (each step checks if output already exists).
+# All packages install into /workspace/venv so they persist across restarts.
 set -euo pipefail
 
 PROJ_DIR="$(cd "$(dirname "$0")/.." && pwd)"
@@ -14,9 +15,18 @@ fi
 
 DATA_DIR="${TRIBE_DATA_DIR:-$PROJ_DIR/data}"
 
+# ── 0. Persistent venv in /workspace ────────────────────────────────
+VENV_DIR="/workspace/venv"
+if [ ! -d "$VENV_DIR" ]; then
+    echo "── Creating persistent venv at $VENV_DIR ──"
+    python3 -m venv "$VENV_DIR"
+fi
+source "$VENV_DIR/bin/activate"
+
 echo "=== TRIBE v2 Neural Processing Module Setup ==="
 echo "Project dir: $PROJ_DIR"
 echo "Data dir:    $DATA_DIR"
+echo "Venv:        $VENV_DIR"
 
 # ── 1. System dependencies ──────────────────────────────────────────
 echo ""
@@ -29,11 +39,9 @@ echo ""
 echo "── Setting up TRIBE v2 ──"
 if [ ! -d "$PROJ_DIR/tribev2" ]; then
     git clone https://github.com/facebookresearch/tribev2.git "$PROJ_DIR/tribev2"
-    cd "$PROJ_DIR/tribev2"
-    pip install -e '.[plotting]' --quiet
-else
-    echo "  tribev2 already cloned — skipping."
 fi
+cd "$PROJ_DIR/tribev2"
+pip install -e '.[plotting]' --quiet
 
 # ── 3. Install Python dependencies ──────────────────────────────────
 echo ""

@@ -47,11 +47,14 @@ NIMARE_TERMS: list[str] = [
 ]
 
 # Composite score coefficients
+# Composite score coefficients
 VALENCE_WEIGHTS = {
-    "reward_limbic_auc": 0.35,
-    "fear_salience_auc": -0.30,
-    "deliberation_mean": 0.15,
-    "attention_auc": -0.20,
+    "reward_limbic_auc": 0.25,
+    "reward_limbic_peak": 0.15,
+    "fear_salience_auc": -0.20,
+    "fear_salience_peak": -0.15,
+    "deliberation_mean": 0.10,
+    "attention_auc": -0.15,
 }
 
 AROUSAL_WEIGHTS = {

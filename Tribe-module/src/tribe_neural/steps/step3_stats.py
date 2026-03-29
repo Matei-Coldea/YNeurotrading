@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import numpy as np
 
+_trapz = getattr(np, "trapezoid", None) or np.trapz
+
 
 def extract_stats(ts: np.ndarray) -> dict:
     """Compute 11 interpretable features from a single ROI timeseries.
@@ -19,7 +21,11 @@ def extract_stats(ts: np.ndarray) -> dict:
     peak = float(np.max(ts))
     mean_val = float(np.mean(ts))
     std = float(np.std(ts))
-    threshold = max(std, 0.3)
+
+    # Onset threshold: use peak-relative floor instead of fixed 0.3 so that
+    # low-amplitude signals (common for short texts) still get meaningful
+    # onset detection.
+    threshold = max(std, 0.1 * peak) if peak > 0 else max(std, 1e-6)
 
     above = np.where(ts > threshold)[0]
     onset = int(above[0]) if len(above) > 0 else n
@@ -27,7 +33,7 @@ def extract_stats(ts: np.ndarray) -> dict:
     ttp = int(np.argmax(ts))
     rt = max(0, ttp - onset)
 
-    auc = float(np.trapezoid(np.maximum(ts, 0)))
+    auc = float(_trapz(np.maximum(ts, 0))) / max(n, 1)
 
     hm = peak / 2
     ah = ts >= hm
@@ -37,14 +43,23 @@ def extract_stats(ts: np.ndarray) -> dict:
     else:
         fwhm = 0
 
-    sustained = bool(np.mean(ts[-3:]) > 0.5 * threshold) if n >= 3 else False
+    # Sustained: scale tail length by signal length and compare to
+    # peak-relative threshold so short timeseries are handled properly.
+    if n >= 3 and peak > 0:
+        tail_len = max(2, n // 3)
+        sustained = bool(np.mean(ts[-tail_len:]) > 0.2 * peak)
+    else:
+        sustained = False
 
+    # Trajectory: use ratio-based comparison so low-variance signals can
+    # still register as rising/falling.
     if n >= 4:
-        fh = np.mean(ts[: n // 2])
-        sh = np.mean(ts[n // 2 :])
-        if sh > fh + 0.3 * std:
+        fh = float(np.mean(ts[: n // 2]))
+        sh = float(np.mean(ts[n // 2 :]))
+        abs_gap = 0.05  # small absolute floor
+        if sh > fh * 1.15 + abs_gap:
             trajectory = "rising"
-        elif sh < fh - 0.3 * std:
+        elif sh < fh * 0.85 - abs_gap:
             trajectory = "falling"
         else:
             trajectory = "stable"

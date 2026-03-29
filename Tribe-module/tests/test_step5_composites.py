@@ -121,32 +121,51 @@ class TestComputeComposites:
 
     def test_herding_with_social_activation(self):
         stats = _make_stats(
-            social_peak=1.5, social_sustained=True, fear_traj="rising"
+            social_auc=5.0, social_peak=1.5, social_sustained=True,
+            fear_traj="rising",
         )
         composites = compute_composites(stats, {})
         assert composites["herding"] > 0
 
     def test_herding_zero_without_social(self):
-        stats = _make_stats(social_peak=0.5, social_sustained=False)
+        stats = _make_stats(social_auc=0.0, social_peak=0.5, social_sustained=False)
         composites = compute_composites(stats, {})
         assert composites["herding"] == 0.0
 
     def test_herding_amplified_by_connectivity(self):
         stats = _make_stats(
-            social_peak=1.5, social_sustained=True, fear_traj="rising"
+            social_auc=5.0, social_peak=1.5, social_sustained=True,
+            fear_traj="rising",
         )
-        conn = {"fear_social": {"r": 0.8, "p": 0.01}}
-        composites = compute_composites(stats, conn)
-        assert composites["herding"] == pytest.approx(1.5)  # 1.0 * 1.5
+        conn_high = {"fear_social": {"r": 0.8, "p": 0.01}}
+        conn_low = {"fear_social": {"r": -0.5, "p": 0.01}}
+        h_high = compute_composites(stats, conn_high)["herding"]
+        h_low = compute_composites(stats, conn_low)["herding"]
+        assert h_high > h_low  # positive connectivity amplifies herding
+
+    def test_herding_increases_with_fear_rising(self):
+        base = _make_stats(social_auc=5.0, fear_traj="stable")
+        rising = _make_stats(social_auc=5.0, fear_traj="rising")
+        h_base = compute_composites(base, {})["herding"]
+        h_rising = compute_composites(rising, {})["herding"]
+        assert h_rising > h_base
 
     def test_confidence_high(self):
         conn = {"reward_delib": {"r": 0.7, "p": 0.01}}
         stats = _make_stats()
         composites = compute_composites(stats, conn)
-        assert composites["confidence"] == 1.5
+        assert composites["confidence"] > 1.2
 
     def test_confidence_low(self):
         conn = {"fear_deliberation": {"r": -0.7, "p": 0.01}}
-        stats = _make_stats()
+        stats = _make_stats(fear_cv=2.0)
         composites = compute_composites(stats, conn)
-        assert composites["confidence"] == 0.5
+        assert composites["confidence"] < 0.7
+
+    def test_confidence_continuous(self):
+        """Confidence varies smoothly with connectivity."""
+        stats = _make_stats()
+        c1 = compute_composites(stats, {"reward_delib": {"r": 0.3, "p": 0.1}})
+        c2 = compute_composites(stats, {"reward_delib": {"r": 0.6, "p": 0.05}})
+        c3 = compute_composites(stats, {"reward_delib": {"r": 0.9, "p": 0.01}})
+        assert c1["confidence"] < c2["confidence"] < c3["confidence"]

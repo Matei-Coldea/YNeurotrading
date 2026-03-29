@@ -40,6 +40,13 @@ def process(text: str, resources: Resources) -> str:
     except Exception as exc:
         raise PipelineError(step=1, detail=str(exc)) from exc
 
+    # Trim the last 2 TRs: transformer models produce inflated
+    # activations at sequence boundaries (edge artifact).  These
+    # terminal spikes dominate peak/AUC stats and distort composites.
+    if preds.shape[0] > 4:
+        preds = preds[:-2]
+        logger.info("Trimmed edge TRs: %d TRs remaining", preds.shape[0])
+
     t1 = time.perf_counter()
     logger.info("Step 1 (TRIBE): %.1fms", (t1 - t0) * 1000)
 

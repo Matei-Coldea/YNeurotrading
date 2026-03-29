@@ -29,10 +29,20 @@ def format_output(
     """
     lines: list[str] = ["[Neural state reading for this moment]", ""]
 
-    # 1. Dominant signal callout
+    # 1. Dominant signal callout — use peak * sqrt(auc) so that a brief
+    # spike (high peak, low auc) doesn't outrank a strong sustained
+    # response.  Exclude social_default from the dominant contest because
+    # narrative text always activates DMN heavily — it's a baseline for
+    # any story, not a distinguishing emotional signal.
+    _NARRATIVE_BASELINE_ROIS = {"social_default"}
+    salience = {
+        name: s["peak"] * (1.0 + s["auc"]) ** 0.5
+        for name, s in stats.items()
+        if name not in _NARRATIVE_BASELINE_ROIS
+    }
+    strongest = max(salience, key=salience.get)
+    weakest = min(salience, key=salience.get)
     peaks = {name: s["peak"] for name, s in stats.items()}
-    strongest = max(peaks, key=peaks.get)
-    weakest = min(peaks, key=peaks.get)
     lines.append(
         f"Dominant response: {ROI_LABELS[strongest]} "
         f"(peak={peaks[strongest]:.2f})"
@@ -43,19 +53,18 @@ def format_output(
     )
     lines.append("")
 
-    # 2. Processing cascade with seconds
+    # 2. Processing cascade with seconds (all ROIs, no filtering)
     onset_order = sorted(stats.items(), key=lambda x: x[1]["onset_tr"])
     cascade = " \u2192 ".join(
         f"{ROI_LABELS[name]}({s['onset_tr'] * TR_DURATION:.0f}s)"
         for name, s in onset_order
-        if s["peak"] > 0.3
     )
     lines.append(
         f"Processing sequence (what activated first \u2192 last): {cascade}"
     )
     lines.append("")
 
-    # 3. ROI data with readable names and arrow-format curves
+    # 3. ROI data — all 11 statistics per region
     lines.append(
         "Brain region activations "
         "(peak: 0=nothing, 1=moderate, 2+=intense | "
@@ -71,12 +80,26 @@ def format_output(
         curve = " \u2192 ".join(f"{ts[i]:.1f}" for i in indices)
 
         lines.append(
-            f"  {ROI_LABELS[roi_name]}: "
-            f"peak={s['peak']:.2f} auc={s['auc']:.1f} "
-            f"onset={s['onset_tr'] * TR_DURATION:.0f}s "
+            f"  {ROI_LABELS[roi_name]}:"
+        )
+        lines.append(
+            f"    peak={s['peak']:.2f} mean={s['mean']:.2f} auc={s['auc']:.1f}"
+        )
+        lines.append(
+            f"    onset={s['onset_tr'] * TR_DURATION:.0f}s "
+            f"time_to_peak={s['time_to_peak'] * TR_DURATION:.0f}s "
+            f"rise_time={s['rise_time'] * TR_DURATION:.0f}s "
+            f"rise_slope={s['rise_slope']:.3f}"
+        )
+        lines.append(
+            f"    fwhm={s['fwhm'] * TR_DURATION:.0f}s "
             f"{'sustained' if s['sustained'] else 'faded'} "
-            f"{s['trajectory']} cv={s['cv']:.2f} "
-            f"curve(early\u2192late): {curve}"
+            f"{s['trajectory']} "
+            f"cv={s['cv']:.2f} "
+            f"decay_slope={s['decay_slope']:.3f}"
+        )
+        lines.append(
+            f"    curve(early\u2192late): {curve}"
         )
 
     # 4. Connectivity with readable pair names
@@ -88,7 +111,7 @@ def format_output(
     )
     for pair_name, vals in connectivity.items():
         label = PAIR_LABELS.get(pair_name, pair_name)
-        lines.append(f"  {label}: {vals['r']:.2f}")
+        lines.append(f"  {label}: r={vals['r']:.2f} p={vals['p']:.4f}")
 
     # 5. Composites with inline scales
     lines.append("")

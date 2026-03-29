@@ -33,7 +33,7 @@ class TestExtractStats:
         s = extract_stats(flat_ts)
         assert s["trajectory"] == "stable"
         assert s["peak"] == pytest.approx(0.05)
-        assert s["auc"] == pytest.approx(0.45, abs=0.1)
+        assert s["auc"] == pytest.approx(0.045, abs=0.01)
 
     def test_all_zero(self, all_zero_ts):
         s = extract_stats(all_zero_ts)

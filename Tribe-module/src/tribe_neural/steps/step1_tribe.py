@@ -14,11 +14,21 @@ from tribe_neural.validation import PipelineError
 logger = logging.getLogger(__name__)
 
 
+_NEUTRAL_PREAMBLE = (
+    "You are sitting quietly at your desk. "
+    "You pick up your phone and read the following. "
+)
+_MIN_WORDS = 30
+
+
 def run_tribe(text: str, model: object) -> np.ndarray:
     """Run TRIBE v2 inference on naturalistic text.
 
     Writes text to a temp file (TRIBE v2 expects a file path), runs the
     model, and returns predicted cortical surface activations.
+
+    Short texts (< 30 words) are padded with a neutral preamble so the
+    model produces enough timepoints for meaningful statistics.
 
     Args:
         text: Naturalistic text string.
@@ -30,6 +40,13 @@ def run_tribe(text: str, model: object) -> np.ndarray:
     Raises:
         PipelineError: If inference fails or output is invalid.
     """
+    # Pad short texts with a neutral preamble to give the model a
+    # temporal baseline.  The preamble produces ~5 TRs of calm
+    # activation that the actual content contrasts against.
+    padded = len(text.split()) < _MIN_WORDS
+    if padded:
+        text = _NEUTRAL_PREAMBLE + text
+
     with tempfile.NamedTemporaryFile(
         mode="w", suffix=".txt", delete=False
     ) as f:

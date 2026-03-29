@@ -16,12 +16,16 @@ def compute_composites(stats: dict, conn: dict) -> dict:
     """
     s = stats
 
-    # Valence: positive <-> negative (AUC-weighted)
+    # Valence: positive <-> negative.
+    # Uses both AUC (sustained response) and peak (intensity) so that
+    # brief-but-intense emotions (e.g. a spike of joy) aren't missed.
     valence = (
-        0.35 * s["reward_limbic"]["auc"]
-        - 0.30 * s["fear_salience"]["auc"]
-        + 0.15 * s["deliberation"]["mean"]
-        - 0.20 * s.get("attention", {}).get("auc", 0)
+        0.25 * s["reward_limbic"]["auc"]
+        + 0.15 * s["reward_limbic"]["peak"]
+        - 0.20 * s["fear_salience"]["auc"]
+        - 0.15 * s["fear_salience"]["peak"]
+        + 0.10 * s["deliberation"]["mean"]
+        - 0.15 * s.get("attention", {}).get("auc", 0)
     )
 
     # Arousal: overall activation intensity
@@ -57,27 +61,24 @@ def compute_composites(stats: dict, conn: dict) -> dict:
     else:
         regulation = 0.0
 
-    # Herding: social activation + connectivity adjustment
-    herding = 0.0
-    if s["social_default"]["peak"] > 1.0 and s["social_default"]["sustained"]:
-        herding = 1.0 if ft == "rising" else 0.5
-    fsr = conn.get("fear_social", {}).get("r", 0)
-    if fsr > 0.5:
+    # Herding: continuous social activation + connectivity modulation
+    herding = s["social_default"]["auc"] * 0.3
+    if ft == "rising":
         herding *= 1.5
-    elif fsr < -0.3:
-        herding *= 0.3
+    fsr = conn.get("fear_social", {}).get("r", 0)
+    herding *= 1.0 + 0.5 * fsr  # continuous modulation
+    herding = max(0.0, herding)
 
-    # Confidence: from connectivity + variability
+    # Confidence: continuous from connectivity + variability
     rdr = conn.get("reward_delib", {}).get("r", 0)
     fdr = conn.get("fear_deliberation", {}).get("r", 0)
-    if rdr > 0.5:
-        confidence = 1.5
-    elif fdr < -0.5:
-        confidence = 0.5
-    elif s["fear_salience"]["cv"] > 1.5:
-        confidence = 0.6
-    else:
-        confidence = 1.0
+    confidence = (
+        1.0
+        + 0.5 * rdr
+        - 0.3 * max(0, -fdr)
+        - 0.2 * min(s["fear_salience"]["cv"], 2.0)
+    )
+    confidence = max(0.3, min(1.8, confidence))
 
     return {
         "valence": valence,
