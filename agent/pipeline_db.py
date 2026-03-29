@@ -77,6 +77,8 @@ class PipelineDB:
             columns = {row[1] for row in conn.execute("PRAGMA table_info(opportunities)").fetchall()}
             if "simulation_category" not in columns:
                 conn.execute("ALTER TABLE opportunities ADD COLUMN simulation_category TEXT")
+            if "ensemble_agreement" not in columns:
+                conn.execute("ALTER TABLE opportunities ADD COLUMN ensemble_agreement REAL")
 
     # --- Opportunities ---
 
