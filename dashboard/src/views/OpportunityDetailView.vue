@@ -103,18 +103,11 @@
       <!-- Actions -->
       <section class="detail-section actions-section">
         <button
-          v-if="opp.status === 'discovered' && (opp.simulation_potential || 0) >= 3"
+          v-if="(opp.status === 'discovered' && (opp.simulation_potential || 0) >= 3) || opp.status === 'simulation_running'"
           class="btn btn-primary"
-          @click="handleStartSimulation"
+          @click="$router.push(`/opportunity/${opp.id}/simulation`)"
         >
-          Run Simulation
-        </button>
-        <button
-          v-if="opp.status === 'simulation_running' && opp.mirofish_project_id"
-          class="btn"
-          @click="window.open(`http://localhost:3000/process/${opp.mirofish_project_id}`, '_blank')"
-        >
-          Open in MiroFish
+          {{ opp.status === 'simulation_running' ? 'Continue Simulation' : 'Run Simulation' }}
         </button>
         <button
           v-if="opp.status === 'simulation_complete'"
@@ -133,7 +126,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { getOpportunity, startSimulation, syncMirofish, analyzeReport, approveTrade, rejectTrade } from '../api/agent'
+import { getOpportunity, analyzeReport, approveTrade, rejectTrade } from '../api/agent'
 
 const props = defineProps({ id: String })
 const router = useRouter()
@@ -151,16 +144,6 @@ const statusBadgeClass = computed(() => {
 async function load() {
   const res = await getOpportunity(props.id)
   opp.value = res.data.opportunity
-}
-
-async function handleStartSimulation() {
-  try {
-    const res = await startSimulation(props.id)
-    window.open(res.data.mirofish_url, '_blank')
-    await load()
-  } catch (e) {
-    console.error('Failed to start simulation:', e)
-  }
 }
 
 async function handleApproveTrade() {

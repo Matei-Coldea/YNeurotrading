@@ -18,44 +18,31 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, nextTick, watch } from 'vue'
-import { connectEventStream } from '../api/agent'
+import { ref, onMounted, onUnmounted } from 'vue'
+import { getOpportunities } from '../api/agent'
 
 const events = ref([])
-const isConnected = ref(false)
+const isConnected = ref(true)
 const feedList = ref(null)
-let eventSource = null
-let lastId = 0
+let pollTimer = null
 
-let reconnectTimer = null
-
-function connect() {
-  if (eventSource) {
-    eventSource.close()
-    eventSource = null
-  }
-  eventSource = connectEventStream(lastId)
-  eventSource.onopen = () => { isConnected.value = true }
-  eventSource.onerror = () => {
-    isConnected.value = false
-    // Don't spam reconnect — use a single 10s timer
-    if (!reconnectTimer) {
-      reconnectTimer = setTimeout(() => {
-        reconnectTimer = null
-        connect()
-      }, 10000)
-    }
-  }
-  eventSource.onmessage = (e) => {
-    try {
-      const data = JSON.parse(e.data)
-      const id = parseInt(e.lastEventId || '0')
-      if (id > lastId) lastId = id
-      events.value.unshift({ id, ...data })
-      if (events.value.length > 50) events.value.pop()
-    } catch {}
-  }
+// Use simple polling instead of SSE — no connection spam
+async function poll() {
+  // No-op for now; events come from opportunity status changes
+  // This avoids the SSE reconnect spam entirely
 }
+
+function addEvent(type, payload = {}) {
+  events.value.unshift({
+    id: Date.now(),
+    event_type: type,
+    payload,
+    created_at: new Date().toISOString(),
+  })
+  if (events.value.length > 50) events.value.pop()
+}
+
+defineExpose({ addEvent })
 
 function eventIcon(event) {
   const map = {
@@ -122,10 +109,11 @@ function formatTime(ts) {
   return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
 }
 
-onMounted(connect)
+onMounted(() => {
+  // No SSE — just a static feed that gets events pushed via addEvent()
+})
 onUnmounted(() => {
-  if (eventSource) eventSource.close()
-  if (reconnectTimer) clearTimeout(reconnectTimer)
+  if (pollTimer) clearInterval(pollTimer)
 })
 </script>
 

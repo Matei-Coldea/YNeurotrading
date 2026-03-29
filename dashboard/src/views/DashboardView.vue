@@ -27,6 +27,7 @@
 
       <!-- Center: Opportunities -->
       <main class="main-content">
+
         <!-- Simulation-Ready Markets -->
         <section v-if="simReadyOpps.length" class="market-section">
           <h2 class="section-title">Simulation-Ready Markets</h2>
@@ -35,10 +36,8 @@
               v-for="opp in simReadyOpps"
               :key="opp.id"
               :opp="opp"
-              :loading="simulatingIds.has(opp.id)"
               @select="goToOpportunity"
               @start-simulation="handleStartSimulation"
-              @sync-mirofish="handleSyncMirofish"
               @analyze-report="handleAnalyzeReport"
               @approve-trade="handleApproveTrade"
               @reject-trade="handleRejectTrade"
@@ -57,10 +56,8 @@
               v-for="opp in otherOpps"
               :key="opp.id"
               :opp="opp"
-              :loading="simulatingIds.has(opp.id)"
               @select="goToOpportunity"
               @start-simulation="handleStartSimulation"
-              @sync-mirofish="handleSyncMirofish"
               @analyze-report="handleAnalyzeReport"
               @approve-trade="handleApproveTrade"
               @reject-trade="handleRejectTrade"
@@ -78,7 +75,7 @@
       <aside class="sidebar-right">
         <PortfolioPanel ref="portfolioPanel" />
         <div class="sidebar-divider"></div>
-        <EventFeed />
+        <EventFeed ref="eventFeedRef" />
       </aside>
     </div>
   </div>
@@ -89,8 +86,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   startScan, getScanStatus, getOpportunities,
-  startSimulation, syncMirofish, analyzeReport,
-  approveTrade, rejectTrade,
+  analyzeReport, approveTrade, rejectTrade,
 } from '../api/agent'
 import PipelineFunnel from '../components/PipelineFunnel.vue'
 import OpportunityCard from '../components/OpportunityCard.vue'
@@ -103,7 +99,7 @@ const scanStatus = ref('idle')
 const activeFilter = ref(null)
 const showOther = ref(false)
 const portfolioPanel = ref(null)
-const analyzingIds = ref(new Set())
+const eventFeedRef = ref(null)
 
 // Split opportunities into simulation-ready and other
 const filteredOpps = computed(() => {
@@ -172,39 +168,8 @@ function goToOpportunity(id) {
   router.push(`/opportunity/${id}`)
 }
 
-const simulatingIds = ref(new Set())
-
-async function handleStartSimulation(id) {
-  // Open window immediately on user click (avoids popup blocker)
-  const win = window.open('about:blank', '_blank')
-  simulatingIds.value.add(id)
-  try {
-    const res = await startSimulation(id)
-    const url = res.data.mirofish_url
-    if (win) {
-      win.location.href = url
-    } else {
-      // Popup was blocked — show URL to user
-      alert(`MiroFish simulation ready. Open: ${url}`)
-    }
-    await loadOpportunities()
-  } catch (e) {
-    console.error('Failed to start simulation:', e)
-    if (win) win.close()
-    alert('Failed to start simulation: ' + (e.response?.data?.detail || e.message))
-    await loadOpportunities()
-  } finally {
-    simulatingIds.value.delete(id)
-  }
-}
-
-async function handleSyncMirofish(id) {
-  try {
-    await syncMirofish(id)
-    await loadOpportunities()
-  } catch (e) {
-    console.error('Failed to sync MiroFish status:', e)
-  }
+function handleStartSimulation(id) {
+  router.push(`/opportunity/${id}/simulation`)
 }
 
 async function handleAnalyzeReport(id) {

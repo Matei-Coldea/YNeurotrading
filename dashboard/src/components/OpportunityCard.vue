@@ -31,27 +31,11 @@
 
     <div class="card-actions" @click.stop>
       <button
-        v-if="opp.status === 'discovered' && opp.simulation_potential >= 3"
+        v-if="(opp.status === 'discovered' && opp.simulation_potential >= 3) || opp.status === 'simulation_running'"
         class="btn btn-primary btn-sm"
-        :disabled="loading"
         @click="$emit('start-simulation', opp.id)"
       >
-        <span v-if="loading" class="spinner-sm"></span>
-        {{ loading ? 'Preparing...' : 'Run Simulation' }}
-      </button>
-      <button
-        v-if="opp.status === 'simulation_running' && opp.mirofish_project_id"
-        class="btn btn-sm"
-        @click.stop="openMirofish"
-      >
-        Open in MiroFish
-      </button>
-      <button
-        v-if="opp.status === 'simulation_running'"
-        class="btn btn-sm"
-        @click="$emit('sync-mirofish', opp.id)"
-      >
-        Check Status
+        {{ opp.status === 'simulation_running' ? 'Continue Simulation' : 'Run Simulation' }}
       </button>
       <button
         v-if="opp.status === 'simulation_complete'"
@@ -60,15 +44,6 @@
       >
         Analyze Trade
       </button>
-      <a
-        v-if="opp.mirofish_simulation_id"
-        :href="`http://localhost:3000/y/${opp.mirofish_simulation_id}`"
-        target="_blank"
-        class="btn btn-sm"
-        @click.stop
-      >
-        Y.com Feed
-      </a>
       <button
         v-if="opp.status === 'trade_proposed'"
         class="btn btn-success btn-sm"
@@ -97,15 +72,9 @@ import { computed } from 'vue'
 
 const props = defineProps({
   opp: { type: Object, required: true },
-  loading: { type: Boolean, default: false },
 })
 
-defineEmits(['select', 'start-simulation', 'sync-mirofish', 'analyze-report', 'approve-trade', 'reject-trade'])
-
-function openMirofish() {
-  const pid = props.opp.mirofish_project_id
-  if (pid) window.open(`http://localhost:3000/process/${pid}`, '_blank')
-}
+defineEmits(['select', 'start-simulation', 'analyze-report', 'approve-trade', 'reject-trade'])
 
 const statusBadgeClass = computed(() => {
   const map = {
@@ -233,14 +202,4 @@ function truncate(s, len) {
   font-size: 11px;
   color: var(--text-muted);
 }
-.spinner-sm {
-  display: inline-block;
-  width: 12px;
-  height: 12px;
-  border: 2px solid rgba(255,255,255,0.3);
-  border-top-color: #fff;
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-}
-@keyframes spin { to { transform: rotate(360deg); } }
 </style>

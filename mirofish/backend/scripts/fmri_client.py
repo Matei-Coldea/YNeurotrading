@@ -9,7 +9,7 @@ import aiohttp
 
 logger = logging.getLogger("mirofish.fmri_client")
 
-FMRI_TIMEOUT = aiohttp.ClientTimeout(total=15)
+FMRI_TIMEOUT = aiohttp.ClientTimeout(total=300)
 
 
 def _server_url() -> str:

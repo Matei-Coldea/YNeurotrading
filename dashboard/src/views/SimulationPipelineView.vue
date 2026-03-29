@@ -1,72 +1,192 @@
 <template>
-  <div class="redirect-view">
-    <header class="detail-header">
-      <button class="btn btn-sm" @click="$router.push('/')">← Dashboard</button>
-      <h1 class="logo">NEURO-TRADE</h1>
+  <div class="simulation-view">
+    <header class="sim-header">
+      <button class="back-btn" @click="goBack">← Dashboard</button>
+      <span class="header-logo">NEURO-TRADE</span>
+      <span class="header-divider"></span>
+      <span class="header-market">{{ truncate(marketQuestion, 55) }}</span>
+      <span class="badge" :class="statusBadge">{{ statusText }}</span>
     </header>
-    <div class="redirect-body">
-      <div v-if="loading" class="loading-state">
-        <div class="spinner"></div>
-        <p>Generating seed document and simulation prompt...</p>
-        <p class="text-muted">The agent is preparing the simulation based on market research.</p>
-      </div>
-      <div v-else-if="mirofishUrl" class="redirect-state">
-        <p>Simulation project created. MiroFish should have opened in a new tab.</p>
-        <a :href="mirofishUrl" target="_blank" class="btn btn-primary">Open MiroFish</a>
-        <p class="text-muted">Complete the simulation steps in MiroFish, then return here.</p>
-        <button class="btn" @click="$router.push('/')">Back to Dashboard</button>
-      </div>
-      <div v-else-if="error" class="error-state">
-        <p class="text-red">{{ error }}</p>
-        <button class="btn" @click="$router.push('/')">Back to Dashboard</button>
-      </div>
+
+    <div v-if="preparing" class="center-state">
+      <div class="spinner"></div>
+      <h2>Preparing Simulation</h2>
+      <p>Generating seed document and simulation parameters from market research...</p>
+      <p class="hint">This usually takes 15-30 seconds</p>
     </div>
+
+    <div v-else-if="error" class="center-state">
+      <p class="error-msg">{{ error }}</p>
+      <button class="btn btn-primary" @click="goBack">Back to Dashboard</button>
+    </div>
+
+    <iframe
+      v-else-if="iframeUrl"
+      :src="iframeUrl"
+      class="mirofish-frame"
+    ></iframe>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
-import { startSimulation } from '../api/agent'
+import { ref, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
+import { getOpportunity, startSimulation, syncMirofish } from '../api/agent'
 
 const props = defineProps({ id: String })
+const router = useRouter()
 
-const loading = ref(true)
-const mirofishUrl = ref(null)
+const preparing = ref(true)
 const error = ref(null)
+const iframeUrl = ref(null)
+const marketQuestion = ref('')
+const oppStatus = ref('')
+
+const statusBadge = computed(() => ({
+  'badge-yellow': oppStatus.value === 'simulation_running' || preparing.value,
+  'badge-green': oppStatus.value === 'simulation_complete',
+}))
+
+const statusText = computed(() => {
+  if (preparing.value) return 'Preparing'
+  return {
+    simulation_running: 'Simulating',
+    simulation_complete: 'Complete',
+  }[oppStatus.value] || 'Running'
+})
 
 onMounted(async () => {
   try {
-    const res = await startSimulation(props.id)
-    mirofishUrl.value = res.data.mirofish_url
-    window.open(res.data.mirofish_url, '_blank')
+    const res = await getOpportunity(props.id)
+    const opp = res.data.opportunity
+    marketQuestion.value = opp.market_question || ''
+    oppStatus.value = opp.status
+
+    if (opp.mirofish_project_id) {
+      // Already has a project — show iframe directly
+      iframeUrl.value = `http://localhost:3000/process/${opp.mirofish_project_id}`
+      preparing.value = false
+    } else {
+      // Create the project, then show iframe
+      const simRes = await startSimulation(props.id)
+      iframeUrl.value = simRes.data.mirofish_url
+      oppStatus.value = 'simulation_running'
+      preparing.value = false
+    }
   } catch (e) {
     error.value = e.response?.data?.detail || e.message || 'Failed to start simulation'
-  } finally {
-    loading.value = false
+    preparing.value = false
   }
 })
+
+async function goBack() {
+  try { await syncMirofish(props.id) } catch {}
+  router.push('/')
+}
+
+function truncate(s, len) {
+  if (!s) return ''
+  return s.length > len ? s.slice(0, len) + '...' : s
+}
 </script>
 
 <style scoped>
-.redirect-view { min-height: 100vh; }
-.detail-header {
-  display: flex; align-items: center; gap: 16px;
-  padding: 0 24px; height: 60px; background: #000; color: #fff;
+.simulation-view {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
-.detail-header .logo { font-family: var(--font-mono); font-size: 14px; font-weight: 800; letter-spacing: 2px; color: #fff; margin: 0; }
-.detail-header .btn { color: #fff; border-color: #444; }
-.detail-header .btn:hover { background: #222; }
-.redirect-body {
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
-  padding: 60px 24px; text-align: center; gap: 16px;
+
+.sim-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 16px;
+  height: 44px;
+  background: #000;
+  color: #fff;
+  flex-shrink: 0;
 }
-.loading-state, .redirect-state, .error-state {
-  display: flex; flex-direction: column; align-items: center; gap: 12px;
+
+.back-btn {
+  background: none;
+  border: 1px solid #444;
+  color: #fff;
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  white-space: nowrap;
 }
+.back-btn:hover {
+  background: #222;
+}
+
+.header-logo {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 2px;
+  white-space: nowrap;
+}
+
+.header-divider {
+  width: 1px;
+  height: 20px;
+  background: #444;
+  flex-shrink: 0;
+}
+
+.header-market {
+  font-size: 12px;
+  color: #999;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mirofish-frame {
+  flex: 1;
+  width: 100%;
+  border: none;
+}
+
+.center-state {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  text-align: center;
+  padding: 40px;
+}
+.center-state h2 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+}
+.center-state p {
+  font-size: 14px;
+  color: var(--text-secondary);
+  margin: 0;
+}
+.center-state .hint {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.error-msg {
+  color: var(--red);
+}
+
 .spinner {
-  width: 32px; height: 32px;
-  border: 3px solid var(--border-light);
-  border-top-color: var(--accent);
+  width: 32px;
+  height: 32px;
+  border: 3px solid var(--border-light, #e5e5e5);
+  border-top-color: var(--accent, #FF4500);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
