@@ -97,8 +97,11 @@ def build_narrative(env_prompt: str) -> str | None:
 def _extract_posts(env_prompt: str) -> list[dict]:
     """Pull the JSON post list out of the OASIS env_prompt string."""
     # OASIS wraps posts in: "After refreshing, you see some posts [...]"
-    # Find the outermost JSON array in the string.
-    bracket_start = env_prompt.find("[")
+    # Find the JSON array that follows the posts marker, not any earlier arrays.
+    marker = "you see some posts"
+    marker_pos = env_prompt.find(marker)
+    search_start = marker_pos + len(marker) if marker_pos != -1 else 0
+    bracket_start = env_prompt.find("[", search_start)
     if bracket_start == -1:
         return []
 

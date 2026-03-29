@@ -40,6 +40,8 @@ async def _neural_perform_action_by_llm(self):
     # 2. Convert feed to narrative → call fMRI server
     original_content = self.system_message.content
     narrative = build_narrative(env_prompt)
+    if not narrative:
+        print(f"[fMRI] Agent {self.social_agent_id}: no narrative (feed: {env_prompt[:100]}...)", flush=True)
     if narrative:
         try:
             print(f"[fMRI] Agent {self.social_agent_id}: calling server...", flush=True)
