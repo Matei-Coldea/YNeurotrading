@@ -50,6 +50,7 @@ else:
 import re
 import aiohttp
 from neural_agent import patch_agent_with_fmri
+from fmri_client import warmup as fmri_warmup
 
 
 class UnicodeFormatter(logging.Formatter):
@@ -588,17 +589,26 @@ class TwitterSimulationRunner:
         # Patch agents with fMRI neural state injection
         if self.fmri_enabled:
             self._fmri_session = aiohttp.ClientSession()
-            agent_configs = self.config.get("agent_configs", [])
-            patched = 0
-            for cfg in agent_configs:
-                agent_id = cfg.get("agent_id", 0)
-                try:
-                    agent = self.agent_graph.get_agent(agent_id)
-                    patch_agent_with_fmri(agent, self._fmri_session)
-                    patched += 1
-                except Exception:
-                    pass
-            print(f"fMRI integration enabled: patched {patched} agents")
+            # Wake up RunPod pod before simulation starts
+            print("Warming up fMRI server...")
+            server_ok = await fmri_warmup(self._fmri_session)
+            if not server_ok:
+                print("WARNING: fMRI server unreachable — continuing without neural grounding")
+                await self._fmri_session.close()
+                self._fmri_session = None
+                self.fmri_enabled = False
+            else:
+                agent_configs = self.config.get("agent_configs", [])
+                patched = 0
+                for cfg in agent_configs:
+                    agent_id = cfg.get("agent_id", 0)
+                    try:
+                        agent = self.agent_graph.get_agent(agent_id)
+                        patch_agent_with_fmri(agent, self._fmri_session)
+                        patched += 1
+                    except Exception:
+                        pass
+                print(f"fMRI integration enabled: patched {patched} agents")
 
         # Databasepath
         db_path = self._get_db_path()

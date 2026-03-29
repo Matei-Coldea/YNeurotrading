@@ -1,9 +1,7 @@
 <template>
   <div class="simulation-view">
     <header class="sim-header">
-      <button class="back-btn" @click="showIframe ? exitFullscreen() : goBack()">
-        {{ showIframe ? '← Overview' : '← Dashboard' }}
-      </button>
+      <button class="back-btn" @click="goBack">← Dashboard</button>
       <span class="header-logo">NEURO-TRADE</span>
       <span class="header-divider"></span>
       <span class="header-market">{{ truncate(marketQuestion, 55) }}</span>
@@ -24,8 +22,8 @@
       <button class="btn btn-primary" @click="goBack">Back to Dashboard</button>
     </div>
 
-    <!-- Status overview (default view) -->
-    <div v-show="!showIframe && !preparing && !error" class="status-body">
+    <!-- Status overview -->
+    <div v-else class="status-body">
       <div class="overview-grid">
         <!-- Progress panel -->
         <div class="panel card">
@@ -122,14 +120,6 @@
         </div>
       </div>
     </div>
-
-    <!-- Iframe — v-show keeps it alive when toggling back to overview -->
-    <iframe
-      v-if="iframeUrl"
-      v-show="showIframe"
-      :src="iframeUrl"
-      class="mirofish-frame"
-    ></iframe>
   </div>
 </template>
 
@@ -138,6 +128,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { getOpportunity, startSimulation, syncMirofish } from '../api/agent'
 import { getRunStatus, getPostsFeed } from '../api/mirofish'
+import { simIframe } from '../store/simulationIframe'
 
 const props = defineProps({ id: String })
 const router = useRouter()
@@ -145,31 +136,21 @@ const router = useRouter()
 const preparing = ref(true)
 const error = ref(null)
 const opp = ref(null)
-const showIframe = ref(false)
-const iframeUrl = ref(null)
 const simProgress = ref({})
 const recentPosts = ref([])
 let pollTimer = null
 
 const marketQuestion = computed(() => opp.value?.market_question || '')
 
-// Pick the deepest MiroFish URL based on current progress
 function pickMirofishUrl(opportunity, progress = {}) {
   const { mirofish_project_id, mirofish_simulation_id, mirofish_report_id } = opportunity
   const base = 'http://localhost:3000'
-
-  // Report ready → report view
   if (mirofish_report_id) return `${base}/report/${mirofish_report_id}`
-
   if (mirofish_simulation_id) {
     const s = progress.runner_status
-    // Simulation has been started (running, completed, etc.) → running view
     if (s || progress.current_round > 0) return `${base}/simulation/${mirofish_simulation_id}/start`
-    // Simulation created but not started → preparation view
     return `${base}/simulation/${mirofish_simulation_id}`
   }
-
-  // Only project exists → process wizard
   if (mirofish_project_id) return `${base}/process/${mirofish_project_id}`
   return null
 }
@@ -200,15 +181,16 @@ const progressPercent = computed(() => {
 })
 
 onMounted(async () => {
+  // Hide the global iframe when entering status overview
+  simIframe.visible = false
+
   try {
-    // Sync status from MiroFish first
     try { await syncMirofish(props.id) } catch {}
 
     const res = await getOpportunity(props.id)
     opp.value = res.data.opportunity
 
     if (opp.value.mirofish_project_id) {
-      // Fetch current progress to pick the right MiroFish URL
       let progress = {}
       if (opp.value.mirofish_simulation_id) {
         try {
@@ -217,13 +199,16 @@ onMounted(async () => {
           simProgress.value = progress
         } catch {}
       }
-      iframeUrl.value = pickMirofishUrl(opp.value, progress)
+      // Only set iframe URL if it hasn't been set yet (preserve existing iframe)
+      const newUrl = pickMirofishUrl(opp.value, progress)
+      if (!simIframe.url || simIframe.url !== newUrl) {
+        simIframe.url = newUrl
+      }
       preparing.value = false
       startPolling()
     } else {
-      // Need to create project first
       const simRes = await startSimulation(props.id)
-      iframeUrl.value = simRes.data.mirofish_url
+      simIframe.url = simRes.data.mirofish_url
       const res2 = await getOpportunity(props.id)
       opp.value = res2.data.opportunity
       preparing.value = false
@@ -243,7 +228,6 @@ function startPolling() {
 async function fetchProgress() {
   const simId = opp.value?.mirofish_simulation_id
   if (!simId) {
-    // No simulation_id yet — sync to check if one was created in MiroFish
     try {
       await syncMirofish(props.id)
       const res = await getOpportunity(props.id)
@@ -252,20 +236,17 @@ async function fetchProgress() {
     return
   }
 
-  // Fetch live progress directly from MiroFish
   try {
     const statusRes = await getRunStatus(simId)
     simProgress.value = statusRes.data?.data || statusRes.data || {}
   } catch {}
 
-  // Fetch recent posts
   try {
     const postsRes = await getPostsFeed(simId, 5)
     const data = postsRes.data?.data || postsRes.data
     recentPosts.value = (Array.isArray(data) ? data : data?.posts || data?.items || []).slice(0, 5)
   } catch {}
 
-  // When simulation completes, sync agent server status
   if (isSimComplete.value && opp.value?.status !== 'simulation_complete') {
     try {
       await syncMirofish(props.id)
@@ -274,20 +255,17 @@ async function fetchProgress() {
     } catch {}
   }
 
-  // Stop polling once fully complete
   if (opp.value?.status === 'simulation_complete') {
     if (pollTimer) { clearInterval(pollTimer); pollTimer = null }
   }
 }
 
-function enterFullscreen() { showIframe.value = true }
-
-function exitFullscreen() {
-  showIframe.value = false
-  fetchProgress()
+function enterFullscreen() {
+  simIframe.visible = true
 }
 
 async function goBack() {
+  simIframe.visible = false
   try { await syncMirofish(props.id) } catch {}
   router.push('/')
 }
@@ -359,7 +337,7 @@ onUnmounted(() => {
   white-space: nowrap;
 }
 
-/* Center state (preparing / error) */
+/* Center state */
 .center-state {
   flex: 1;
   display: flex;
@@ -407,68 +385,21 @@ onUnmounted(() => {
 }
 
 /* Step list */
-.step-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-bottom: 16px;
-}
-.step-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
-  color: var(--text-secondary);
-}
-.step-icon {
-  width: 18px;
-  text-align: center;
-  font-size: 12px;
-  color: var(--text-muted);
-  flex-shrink: 0;
-}
+.step-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; }
+.step-row { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-secondary); }
+.step-icon { width: 18px; text-align: center; font-size: 12px; color: var(--text-muted); flex-shrink: 0; }
 .step-icon.done { color: var(--green, #4caf50); }
 .step-icon.active { color: var(--accent, #FF4500); font-weight: 700; }
-.step-detail {
-  margin-left: auto;
-  font-size: 12px;
-  color: var(--text-muted);
-}
+.step-detail { margin-left: auto; font-size: 12px; color: var(--text-muted); }
 
 /* Progress bar */
-.progress-wrap {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 12px;
-}
-.progress-track {
-  flex: 1;
-  height: 6px;
-  background: var(--bg-secondary, #f5f5f5);
-  border-radius: 3px;
-  overflow: hidden;
-}
-.progress-fill {
-  height: 100%;
-  background: var(--accent, #FF4500);
-  border-radius: 3px;
-  transition: width 0.5s ease;
-}
-.progress-pct {
-  font-size: 11px;
-  color: var(--text-muted);
-  width: 32px;
-  text-align: right;
-}
+.progress-wrap { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+.progress-track { flex: 1; height: 6px; background: var(--bg-secondary, #f5f5f5); border-radius: 3px; overflow: hidden; }
+.progress-fill { height: 100%; background: var(--accent, #FF4500); border-radius: 3px; transition: width 0.5s ease; }
+.progress-pct { font-size: 11px; color: var(--text-muted); width: 32px; text-align: right; }
 
 /* Stats */
-.stat-row {
-  display: flex;
-  justify-content: space-between;
-  font-size: 13px;
-  margin-bottom: 16px;
-}
+.stat-row { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 16px; }
 .stat-label { color: var(--text-muted); }
 .stat-val { font-weight: 600; }
 
@@ -477,21 +408,11 @@ onUnmounted(() => {
 
 /* Quick links */
 .quick-links { display: flex; gap: 12px; }
-.link-btn {
-  font-size: 12px;
-  color: var(--accent, #FF4500);
-  text-decoration: none;
-}
+.link-btn { font-size: 12px; color: var(--accent, #FF4500); text-decoration: none; }
 .link-btn:hover { text-decoration: underline; }
 
 /* Market context */
-.market-q {
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--text-primary);
-  margin: 0 0 12px 0;
-  line-height: 1.35;
-}
+.market-q { font-size: 16px; font-weight: 600; color: var(--text-primary); margin: 0 0 12px 0; line-height: 1.35; }
 .prices-row { display: flex; gap: 20px; margin-bottom: 12px; }
 .price-box { display: flex; flex-direction: column; gap: 2px; }
 .lbl { font-size: 11px; text-transform: uppercase; color: var(--text-muted); }
@@ -501,20 +422,10 @@ onUnmounted(() => {
 
 /* Posts feed */
 .posts-feed { display: flex; flex-direction: column; gap: 0; }
-.post-item {
-  padding: 10px 0;
-  border-bottom: 1px solid var(--border-light, #e5e5e5);
-}
+.post-item { padding: 10px 0; border-bottom: 1px solid var(--border-light, #e5e5e5); }
 .post-item:last-child { border-bottom: none; }
 .post-meta { display: flex; justify-content: space-between; margin-bottom: 4px; }
 .post-author { font-size: 12px; font-weight: 600; color: var(--text-primary); }
 .post-time { font-size: 11px; }
 .post-text { font-size: 13px; color: var(--text-secondary); line-height: 1.4; margin: 0; }
-
-/* Iframe */
-.mirofish-frame {
-  flex: 1;
-  width: 100%;
-  border: none;
-}
 </style>

@@ -216,17 +216,36 @@ async def sync_mirofish_status(db: PipelineDB, opp_id: str):
                 if runner_status in ("completed", "complete", "done", "stopped"):
                     # Check for report
                     if not opp.mirofish_report_id:
+                        report_id = None
+                        report_complete = False
+
+                        # Try report/check endpoint
                         resp2 = await client.get(f"/api/report/check/{opp.mirofish_simulation_id}")
                         if resp2.status_code == 200:
-                            report_data = resp2.json()
-                            if report_data.get("has_report") and report_data.get("report_status") in ("completed", "complete"):
-                                db.update_opportunity(
-                                    opp_id,
-                                    mirofish_report_id=report_data.get("report_id"),
-                                    status="simulation_complete",
-                                )
-                                return db.get_opportunity(opp_id)
-                    else:
+                            rd = resp2.json()
+                            rd = rd.get("data", rd) if isinstance(rd, dict) else rd
+                            report_id = rd.get("report_id")
+                            report_complete = rd.get("report_status") in ("completed", "complete")
+
+                        # Fallback: try report/by-simulation endpoint
+                        if not report_id:
+                            resp3 = await client.get(f"/api/report/by-simulation/{opp.mirofish_simulation_id}")
+                            if resp3.status_code == 200:
+                                rd3 = resp3.json()
+                                rd3 = rd3.get("data", rd3) if isinstance(rd3, dict) else rd3
+                                report_id = rd3.get("report_id") or rd3.get("id")
+                                if report_id:
+                                    report_complete = True  # If by-simulation returns it, it's done
+
+                        if report_id:
+                            db.update_opportunity(
+                                opp_id,
+                                mirofish_report_id=report_id,
+                                status="simulation_complete" if report_complete else "simulation_running",
+                            )
+                            return db.get_opportunity(opp_id)
+
+                    if opp.mirofish_report_id:
                         db.update_opportunity(opp_id, status="simulation_complete")
                         return db.get_opportunity(opp_id)
 

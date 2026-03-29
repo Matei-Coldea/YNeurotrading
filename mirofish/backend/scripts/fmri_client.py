@@ -16,6 +16,25 @@ def _server_url() -> str:
     return os.getenv("FMRI_SERVER_URL", "http://localhost:8000")
 
 
+async def warmup(session: aiohttp.ClientSession) -> bool:
+    """Ping /health to wake up the RunPod pod. Call once before simulation starts.
+
+    Returns True if the server is reachable, False otherwise.
+    """
+    url = f"{_server_url()}/health"
+    try:
+        async with session.get(url, timeout=aiohttp.ClientTimeout(total=30)) as resp:
+            ok = resp.status == 200
+            if ok:
+                logger.info("fMRI server is up: %s", await resp.json())
+            else:
+                logger.warning("fMRI server health check returned %d", resp.status)
+            return ok
+    except Exception as exc:
+        logger.warning("fMRI server unreachable: %r", exc)
+        return False
+
+
 async def get_neural_state(
     text: str,
     session: aiohttp.ClientSession,

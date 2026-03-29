@@ -35,7 +35,7 @@ for candidate in [
 
 import aiohttp
 from feed_narrative import build_narrative
-from fmri_client import get_neural_state
+from fmri_client import get_neural_state, warmup as fmri_warmup
 
 
 SIMS_DIR = os.path.join(_scripts_dir, "..", "uploads", "simulations")
@@ -173,6 +173,8 @@ async def main():
     print(f"--- Calling fMRI server at {fmri_url} ---")
 
     async with aiohttp.ClientSession() as session:
+        # Wake up RunPod pod first
+        await fmri_warmup(session)
         neural_state = await get_neural_state(narrative, session)
 
     if neural_state:
