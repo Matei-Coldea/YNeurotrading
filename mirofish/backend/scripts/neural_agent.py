@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import TYPE_CHECKING
 
-import aiohttp
 from camel.messages import BaseMessage
 
 from feed_narrative import build_narrative
@@ -34,13 +34,27 @@ async def _neural_perform_action_by_llm(self):
     LLM decision, then restores the original system prompt.
     """
     # 1. Get current feed
+    print(f"[fMRI] Agent {self.social_agent_id}: start", flush=True)
     env_prompt = await self.env.to_text_prompt()
 
     # 2. Convert feed to narrative → call fMRI server
     original_content = self.system_message.content
     narrative = build_narrative(env_prompt)
-    if narrative and self._fmri_session:
-        neural_state = await get_neural_state(narrative, self._fmri_session)
+    if narrative:
+        try:
+            print(f"[fMRI] Agent {self.social_agent_id}: calling server...", flush=True)
+            neural_state = await asyncio.wait_for(
+                get_neural_state(narrative),
+                timeout=60,
+            )
+            print(f"[fMRI] Agent {self.social_agent_id}: got {'result' if neural_state else 'nothing'}", flush=True)
+        except asyncio.TimeoutError:
+            print(f"[fMRI] Agent {self.social_agent_id}: TIMEOUT", flush=True)
+            neural_state = None
+        except Exception as exc:
+            print(f"[fMRI] Agent {self.social_agent_id}: ERROR {exc}", flush=True)
+            neural_state = None
+
         if neural_state:
             self.system_message.content = (
                 f"{original_content}\n\n"
@@ -67,42 +81,25 @@ async def _neural_perform_action_by_llm(self):
     )
 
     try:
-        logger.info(
-            "Agent %d observing environment: %s", self.social_agent_id, env_prompt
-        )
+        print(f"[fMRI] Agent {self.social_agent_id}: calling LLM...", flush=True)
         response = await self.astep(user_msg)
+        print(f"[fMRI] Agent {self.social_agent_id}: done", flush=True)
         for tool_call in response.info["tool_calls"]:
             action_name = tool_call.tool_name
             args = tool_call.args
-            logger.info(
-                "Agent %d performed action: %s with args: %s",
-                self.social_agent_id,
-                action_name,
-                args,
-            )
             if action_name not in _get_all_social_actions():
-                logger.info(
-                    "Agent %d get the result: %s",
-                    self.social_agent_id,
-                    tool_call.result,
-                )
+                pass
             return response
     except Exception as e:
-        logger.error("Agent %d error: %s", self.social_agent_id, e)
+        print(f"[fMRI] Agent {self.social_agent_id}: LLM error: {e}", flush=True)
         return e
     finally:
-        # 4. Always restore original system prompt
         self.system_message.content = original_content
 
 
-def patch_agent_with_fmri(
-    agent: "SocialAgent",
-    session: aiohttp.ClientSession,
-) -> None:
+def patch_agent_with_fmri(agent: "SocialAgent") -> None:
     """Replace an agent's perform_action_by_llm with the fMRI-enabled version."""
     import types
-
-    agent._fmri_session = session
     agent.perform_action_by_llm = types.MethodType(
         _neural_perform_action_by_llm, agent
     )

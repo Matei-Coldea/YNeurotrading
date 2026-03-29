@@ -48,7 +48,6 @@ else:
 
 
 import re
-import aiohttp
 from neural_agent import patch_agent_with_fmri
 from fmri_client import warmup as fmri_warmup
 
@@ -414,7 +413,6 @@ class TwitterSimulationRunner:
         self.agent_graph = None
         self.ipc_handler = None
         self.fmri_enabled = os.getenv("FMRI_ENABLED", "").lower() == "true"
-        self._fmri_session = None
         
     def _load_config(self) -> Dict[str, Any]:
         """Load configuration file"""
@@ -588,14 +586,10 @@ class TwitterSimulationRunner:
         
         # Patch agents with fMRI neural state injection
         if self.fmri_enabled:
-            self._fmri_session = aiohttp.ClientSession()
-            # Wake up RunPod pod before simulation starts
             print("Warming up fMRI server...")
-            server_ok = await fmri_warmup(self._fmri_session)
+            server_ok = await fmri_warmup()
             if not server_ok:
                 print("WARNING: fMRI server unreachable — continuing without neural grounding")
-                await self._fmri_session.close()
-                self._fmri_session = None
                 self.fmri_enabled = False
             else:
                 agent_configs = self.config.get("agent_configs", [])
@@ -604,7 +598,7 @@ class TwitterSimulationRunner:
                     agent_id = cfg.get("agent_id", 0)
                     try:
                         agent = self.agent_graph.get_agent(agent_id)
-                        patch_agent_with_fmri(agent, self._fmri_session)
+                        patch_agent_with_fmri(agent)
                         patched += 1
                     except Exception:
                         pass
@@ -726,9 +720,6 @@ class TwitterSimulationRunner:
             print("\nClose environment...")
         
         # Close fMRI session
-        if self._fmri_session:
-            await self._fmri_session.close()
-
         # Close environment
         self.ipc_handler.update_status("stopped")
         await self.env.close()

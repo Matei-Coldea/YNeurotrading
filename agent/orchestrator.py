@@ -27,10 +27,11 @@ from mcp_servers.paper_trading_server import paper_trading_all_tools, buy, sell,
 from mcp_servers.web_search import web_search
 from prompts.main_agent import (
     SCAN_SYSTEM_PROMPT, TRADE_PROPOSAL_PROMPT,
-    TRADE_PROPOSAL_PROMPT_DIRECT,
+    TRADE_PROPOSAL_PROMPT_DIRECT, TRADE_PROPOSAL_PROMPT_INDIRECT,
 )
 from prompts.simulation_prompts import (
     SEED_GENERATION_PROMPT_DIRECT,
+    SEED_GENERATION_PROMPT_INDIRECT,
     SEED_GENERATION_PROMPT_FALLBACK,
 )
 from config import MIROFISH_API_URL
@@ -336,6 +337,8 @@ async def _generate_seed_and_prompt(opp: Opportunity) -> tuple[str, str]:
     # Select category-specific prompt
     if opp.simulation_category == "direct":
         prompt_template = SEED_GENERATION_PROMPT_DIRECT
+    elif opp.simulation_category == "indirect":
+        prompt_template = SEED_GENERATION_PROMPT_INDIRECT
     else:
         prompt_template = SEED_GENERATION_PROMPT_FALLBACK
 
@@ -383,6 +386,8 @@ async def _generate_trade_proposal(db: PipelineDB, opp_id: str, report_text: str
     # Select category-specific trade proposal prompt
     if opp.simulation_category == "direct":
         prompt_template = TRADE_PROPOSAL_PROMPT_DIRECT
+    elif opp.simulation_category == "indirect":
+        prompt_template = TRADE_PROPOSAL_PROMPT_INDIRECT
     else:
         prompt_template = TRADE_PROPOSAL_PROMPT  # generic fallback
 

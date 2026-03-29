@@ -23,12 +23,6 @@
         <span class="price-label">No</span>
         <span class="price-value font-mono">${{ formatPrice(opp.outcome_prices?.[1]) }}</span>
       </div>
-      <div v-if="opp.estimated_edge != null && opp.estimated_edge !== 0" class="price-item">
-        <span class="price-label">Edge</span>
-        <span class="price-value font-mono" :class="opp.estimated_edge > 0 ? 'text-green' : 'text-red'">
-          {{ opp.estimated_edge > 0 ? '+' : '' }}{{ (opp.estimated_edge * 100).toFixed(1) }}pp
-        </span>
-      </div>
     </div>
 
     <p v-if="opp.agent_hypothesis" class="hypothesis">{{ truncate(opp.agent_hypothesis, 120) }}</p>
@@ -110,17 +104,21 @@ defineEmits(['select', 'start-simulation', 'analyze-report', 'approve-trade', 'r
 
 const simCategoryLabel = computed(() => {
   if (props.opp.simulation_category === 'direct') return 'Opinion → Outcome'
+  if (props.opp.simulation_category === 'indirect') return 'Belief Momentum → Alpha'
   return ''
 })
 
 const simCategoryClass = computed(() => {
   if (props.opp.simulation_category === 'direct') return 'badge-cyan'
+  if (props.opp.simulation_category === 'indirect') return 'badge-orange'
   return ''
 })
 
 const simCategoryTooltip = computed(() => {
   if (props.opp.simulation_category === 'direct')
     return 'Public opinion determines the outcome — simulation directly predicts the result'
+  if (props.opp.simulation_category === 'indirect')
+    return 'Detect shifts in what people believe will happen — buy before the market price catches up, sell when it does'
   return ''
 })
 
@@ -202,6 +200,11 @@ function truncate(s, len) {
   background: rgba(0, 188, 212, 0.12);
   color: #00acc1;
   border: 1px solid rgba(0, 188, 212, 0.25);
+}
+.badge-orange {
+  background: rgba(255, 152, 0, 0.12);
+  color: #f57c00;
+  border: 1px solid rgba(255, 152, 0, 0.25);
 }
 .sim-potential { display: flex; gap: 3px; }
 .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--border-light); }

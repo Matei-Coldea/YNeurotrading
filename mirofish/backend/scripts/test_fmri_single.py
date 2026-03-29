@@ -33,7 +33,6 @@ for candidate in [
         load_dotenv(candidate)
         break
 
-import aiohttp
 from feed_narrative import build_narrative
 from fmri_client import get_neural_state, warmup as fmri_warmup
 
@@ -172,10 +171,9 @@ async def main():
     fmri_url = os.getenv("FMRI_SERVER_URL", "http://localhost:8000")
     print(f"--- Calling fMRI server at {fmri_url} ---")
 
-    async with aiohttp.ClientSession() as session:
-        # Wake up RunPod pod first
-        await fmri_warmup(session)
-        neural_state = await get_neural_state(narrative, session)
+    # Wake up RunPod pod first
+    await fmri_warmup()
+    neural_state = await get_neural_state(narrative)
 
     if neural_state:
         print(f"--- Neural State ---")
