@@ -93,4 +93,8 @@ async def main():
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    if "--server" in sys.argv:
+        from server import start
+        start()
+    else:
+        asyncio.run(main())

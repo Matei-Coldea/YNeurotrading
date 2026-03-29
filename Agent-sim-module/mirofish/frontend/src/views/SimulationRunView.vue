@@ -3,7 +3,7 @@
     <!-- Header -->
     <header class="app-header">
       <div class="header-left">
-        <div class="brand" @click="router.push('/')">MIROFISH OFFLINE</div>
+        <div class="brand" @click="router.push('/')">NEURO-TRADE</div>
       </div>
       
       <div class="header-center">
@@ -21,6 +21,7 @@
       </div>
 
       <div class="header-right">
+        <button class="y-feed-btn" @click="openYFeed" title="Open Y.com Feed">Y</button>
         <div class="workflow-step">
           <span class="step-num">Step 3/5</span>
           <span class="step-name">Simulation</span>
@@ -95,6 +96,12 @@ const graphData = ref(null)
 const graphLoading = ref(false)
 const systemLogs = ref([])
 const currentStatus = ref('processing') // processing | completed | error
+
+// --- Y.com Feed ---
+const openYFeed = () => {
+  const resolved = router.resolve({ name: 'YFeed', params: { simulationId: currentSimulationId.value } })
+  window.open(resolved.href, '_blank')
+}
 
 // --- Computed Layout Styles ---
 const leftPanelStyle = computed(() => {
@@ -377,6 +384,27 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 16px;
+}
+
+.y-feed-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: #1D9BF0;
+  color: #fff;
+  border: none;
+  font-size: 16px;
+  font-weight: 900;
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.2s;
+}
+
+.y-feed-btn:hover {
+  background: #1A8CD8;
 }
 
 .workflow-step {

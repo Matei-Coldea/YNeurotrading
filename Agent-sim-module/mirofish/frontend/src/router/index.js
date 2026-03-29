@@ -41,6 +41,12 @@ const routes = [
     name: 'Interaction',
     component: InteractionView,
     props: true
+  },
+  {
+    path: '/y/:simulationId',
+    name: 'YFeed',
+    component: () => import('../views/YFeedView.vue'),
+    props: true
   }
 ]
 

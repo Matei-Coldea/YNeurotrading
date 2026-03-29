@@ -178,6 +178,14 @@
                 <span class="btn-icon">◆</span>
                 <span class="btn-text">Analysis Report</span>
               </button>
+              <button
+                class="modal-btn btn-yfeed"
+                @click="goToYFeed"
+              >
+                <span class="btn-step">Feed</span>
+                <span class="btn-icon" style="font-weight: 900; font-size: 16px;">Y</span>
+                <span class="btn-text">Y.com Feed</span>
+              </button>
             </div>
             <!-- Playback unavailable notice -->
             <div class="modal-playback-hint">
@@ -431,6 +439,16 @@ const goToReport = () => {
       params: { reportId: selectedProject.value.report_id }
     })
     closeModal()
+  }
+}
+
+const goToYFeed = () => {
+  if (selectedProject.value?.simulation_id) {
+    const resolved = router.resolve({
+      name: 'YFeed',
+      params: { simulationId: selectedProject.value.simulation_id }
+    })
+    window.open(resolved.href, '_blank')
   }
 }
 
@@ -1315,6 +1333,8 @@ onUnmounted(() => {
 .modal-btn.btn-project .btn-icon { color: #3B82F6; }
 .modal-btn.btn-simulation .btn-icon { color: #F59E0B; }
 .modal-btn.btn-report .btn-icon { color: #10B981; }
+.modal-btn.btn-yfeed .btn-icon { color: #1D9BF0; }
+.modal-btn.btn-yfeed .btn-step { background: rgba(29, 155, 240, 0.1); color: #1D9BF0; }
 
 .modal-btn:hover:not(:disabled) .btn-text {
   color: #111827;

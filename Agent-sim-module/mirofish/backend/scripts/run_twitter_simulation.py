@@ -48,6 +48,8 @@ else:
 
 
 import re
+from neural_agent import patch_agent_with_fmri
+from fmri_client import warmup as fmri_warmup
 
 
 class UnicodeFormatter(logging.Formatter):
@@ -410,6 +412,7 @@ class TwitterSimulationRunner:
         self.env = None
         self.agent_graph = None
         self.ipc_handler = None
+        self.fmri_enabled = os.getenv("FMRI_ENABLED", "").lower() == "true"
         
     def _load_config(self) -> Dict[str, Any]:
         """Load configuration file"""
@@ -581,6 +584,26 @@ class TwitterSimulationRunner:
             available_actions=self.AVAILABLE_ACTIONS,
         )
         
+        # Patch agents with fMRI neural state injection
+        if self.fmri_enabled:
+            print("Warming up fMRI server...")
+            server_ok = await fmri_warmup()
+            if not server_ok:
+                print("WARNING: fMRI server unreachable — continuing without neural grounding")
+                self.fmri_enabled = False
+            else:
+                agent_configs = self.config.get("agent_configs", [])
+                patched = 0
+                for cfg in agent_configs:
+                    agent_id = cfg.get("agent_id", 0)
+                    try:
+                        agent = self.agent_graph.get_agent(agent_id)
+                        patch_agent_with_fmri(agent)
+                        patched += 1
+                    except Exception:
+                        pass
+                print(f"fMRI integration enabled: patched {patched} agents")
+
         # Databasepath
         db_path = self._get_db_path()
         if os.path.exists(db_path):
@@ -696,6 +719,7 @@ class TwitterSimulationRunner:
             
             print("\nClose environment...")
         
+        # Close fMRI session
         # Close environment
         self.ipc_handler.update_status("stopped")
         await self.env.close()

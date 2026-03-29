@@ -15,6 +15,7 @@ from ..services.simulation_manager import SimulationManager
 from ..models.project import ProjectManager
 from ..models.task import TaskManager, TaskStatus
 from ..services.graph_tools import GraphToolsService
+from ..utils.llm_client import LLMClient
 from ..utils.logger import get_logger
 
 logger = get_logger('mirofish.api.report')
@@ -75,6 +76,9 @@ def generate_report():
             return jsonify({"success": False, "error": "GraphStorage not initialized — check Neo4j connection"}), 500
         graph_tools = GraphToolsService(storage=storage)
 
+        # Use K2 reasoning model for report generation if configured
+        k2_client = LLMClient.create_k2_client()
+
         def run_generate():
             try:
                 task_manager.update_task(task_id, status=TaskStatus.PROCESSING, progress=0, message="Initializing Report Agent...")
@@ -82,6 +86,7 @@ def generate_report():
                     graph_id=graph_id,
                     simulation_id=simulation_id,
                     simulation_requirement=simulation_requirement,
+                    llm_client=k2_client,
                     graph_tools=graph_tools
                 )
                 def progress_callback(stage, progress, message):
@@ -254,10 +259,12 @@ def chat_with_report_agent():
             raise ValueError("GraphStorage not initialized — check Neo4j connection")
         graph_tools = GraphToolsService(storage=storage)
 
+        k2_client = LLMClient.create_k2_client()
         agent = ReportAgent(
             graph_id=graph_id,
             simulation_id=simulation_id,
             simulation_requirement=simulation_requirement,
+            llm_client=k2_client,
             graph_tools=graph_tools
         )
 

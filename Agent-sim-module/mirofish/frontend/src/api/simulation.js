@@ -177,6 +177,19 @@ export const interviewAgents = (data) => {
 }
 
 /**
+ * Get posts with user info for Y.com feed
+ * @param {string} simulationId
+ * @param {string} platform - 'twitter' | 'reddit'
+ * @param {number} limit
+ * @param {number} offset
+ */
+export const getPostsFeed = (simulationId, platform = 'twitter', limit = 50, offset = 0) => {
+  return service.get(`/api/simulation/${simulationId}/posts-feed`, {
+    params: { platform, limit, offset }
+  })
+}
+
+/**
  * Get simulation history list (with project details)
  * Used to display historical projects on home page
  * @param {number} limit - Return count limit

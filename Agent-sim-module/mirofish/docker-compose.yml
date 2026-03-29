@@ -12,3 +12,7 @@ services:
     restart: unless-stopped
     volumes:
       - ./backend/uploads:/app/backend/uploads
+      - hf-cache:/root/.cache/huggingface
+
+volumes:
+  hf-cache:

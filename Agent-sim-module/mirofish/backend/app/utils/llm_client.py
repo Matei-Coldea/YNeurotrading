@@ -5,6 +5,7 @@ Supports Ollama num_ctx parameter to prevent prompt truncation
 """
 
 import json
+import logging
 import os
 import re
 from typing import Optional, Dict, Any, List
@@ -21,11 +22,13 @@ class LLMClient:
         api_key: Optional[str] = None,
         base_url: Optional[str] = None,
         model: Optional[str] = None,
-        timeout: float = 300.0
+        timeout: float = 300.0,
+        reasoning_effort: Optional[str] = None,
     ):
         self.api_key = api_key or Config.LLM_API_KEY
         self.base_url = base_url or Config.LLM_BASE_URL
         self.model = model or Config.LLM_MODEL_NAME
+        self.reasoning_effort = reasoning_effort  # K2 reasoning effort: low/medium/high
 
         if not self.api_key:
             raise ValueError("LLM_API_KEY not configured")
@@ -39,6 +42,19 @@ class LLMClient:
         # Ollama context window size — prevents prompt truncation.
         # Read from env OLLAMA_NUM_CTX, default 8192 (Ollama default is only 2048).
         self._num_ctx = int(os.environ.get('OLLAMA_NUM_CTX', '8192'))
+
+    @classmethod
+    def create_k2_client(cls, timeout: float = 300.0) -> Optional["LLMClient"]:
+        """Create a K2 reasoning model client if configured, else return None."""
+        if Config.K2_API_KEY and Config.K2_BASE_URL and Config.K2_MODEL_NAME:
+            return cls(
+                api_key=Config.K2_API_KEY,
+                base_url=Config.K2_BASE_URL,
+                model=Config.K2_MODEL_NAME,
+                timeout=timeout,
+                reasoning_effort=Config.K2_REASONING_EFFORT,
+            )
+        return None
 
     def _is_ollama(self) -> bool:
         """Check if we're talking to an Ollama server."""
@@ -73,8 +89,13 @@ class LLMClient:
         if response_format:
             kwargs["response_format"] = response_format
 
+        # K2 reasoning effort — pass via extra_body
+        if self.reasoning_effort:
+            kwargs["extra_body"] = {
+                "chat_template_kwargs": {"reasoning_effort": self.reasoning_effort}
+            }
         # For Ollama: pass num_ctx via extra_body to prevent prompt truncation
-        if self._is_ollama() and self._num_ctx:
+        elif self._is_ollama() and self._num_ctx:
             kwargs["extra_body"] = {
                 "options": {"num_ctx": self._num_ctx}
             }
@@ -118,3 +139,26 @@ class LLMClient:
             return json.loads(cleaned_response)
         except json.JSONDecodeError:
             raise ValueError(f"Invalid JSON format from LLM: {cleaned_response}")
+
+
+class HermesClient(LLMClient):
+    """LLM Client for Nous Research Hermes — used for humanistic persona generation.
+
+    Falls back to the default LLM config if HERMES_API_KEY is not set.
+    """
+
+    _hermes_logger = logging.getLogger('mirofish.hermes')
+
+    def __init__(self, timeout: float = 300.0):
+        super().__init__(
+            api_key=Config.HERMES_API_KEY or Config.LLM_API_KEY,
+            base_url=Config.HERMES_BASE_URL if Config.HERMES_API_KEY else Config.LLM_BASE_URL,
+            model=Config.HERMES_MODEL_NAME if Config.HERMES_API_KEY else Config.LLM_MODEL_NAME,
+            timeout=timeout,
+        )
+        self.using_hermes = bool(Config.HERMES_API_KEY)
+
+    def chat(self, messages, **kwargs):
+        tag = "Hermes" if self.using_hermes else "LLM-fallback"
+        self._hermes_logger.info(f"[{tag}] Generating with model={self.model}")
+        return super().chat(messages, **kwargs)

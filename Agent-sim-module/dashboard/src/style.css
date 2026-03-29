@@ -1,0 +1,181 @@
+/* Neuro-Trade Dashboard — MiroFish-matched theme */
+
+:root {
+  --bg-primary: #ffffff;
+  --bg-secondary: #fafafa;
+  --bg-card: #ffffff;
+  --bg-card-hover: #f5f5f5;
+  --bg-input: #fafafa;
+
+  --text-primary: #000000;
+  --text-secondary: #666666;
+  --text-muted: #999999;
+
+  --border: #e5e5e5;
+  --border-light: #eeeeee;
+
+  --accent: #FF4500;
+  --accent-hover: #e03d00;
+  --green: #4CAF50;
+  --green-dim: rgba(76, 175, 80, 0.1);
+  --red: #F44336;
+  --red-dim: rgba(244, 67, 54, 0.1);
+  --yellow: #FF9800;
+  --yellow-dim: rgba(255, 152, 0, 0.1);
+  --purple: #9C27B0;
+  --purple-dim: rgba(156, 39, 176, 0.1);
+
+  --font-sans: 'Space Grotesk', 'Noto Sans SC', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+
+  --radius: 6px;
+  --radius-sm: 4px;
+  --radius-lg: 8px;
+
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text-primary);
+  background: var(--bg-primary);
+  -webkit-font-smoothing: antialiased;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--bg-primary);
+}
+
+#app {
+  min-height: 100vh;
+}
+
+/* Scrollbar — match MiroFish */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+::-webkit-scrollbar-thumb {
+  background: #ccc;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #333;
+}
+
+/* Buttons — MiroFish style */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-decoration: none;
+}
+.btn:hover {
+  background: var(--bg-card-hover);
+  border-color: #ccc;
+}
+.btn-primary {
+  background: #000;
+  border-color: #000;
+  color: #fff;
+}
+.btn-primary:hover {
+  background: #222;
+}
+.btn-primary:disabled {
+  background: #e5e5e5;
+  border-color: #e5e5e5;
+  color: #999;
+  cursor: not-allowed;
+}
+.btn-success {
+  background: var(--green);
+  border-color: var(--green);
+  color: white;
+}
+.btn-success:hover {
+  background: #43a047;
+}
+.btn-danger {
+  background: transparent;
+  border-color: var(--red);
+  color: var(--red);
+}
+.btn-danger:hover {
+  background: var(--red-dim);
+}
+.btn-sm {
+  padding: 4px 10px;
+  font-size: 0.75rem;
+}
+
+/* Cards */
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 16px;
+}
+.card:hover {
+  border-color: #ccc;
+}
+
+/* Badges — MiroFish status style */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.badge-green {
+  background: var(--green-dim);
+  color: var(--green);
+}
+.badge-red {
+  background: var(--red-dim);
+  color: var(--red);
+}
+.badge-yellow {
+  background: var(--yellow-dim);
+  color: #e65100;
+}
+.badge-purple {
+  background: var(--purple-dim);
+  color: var(--purple);
+}
+.badge-blue {
+  background: rgba(0, 0, 0, 0.06);
+  color: #000;
+}
+
+/* Utility */
+.text-green { color: var(--green); }
+.text-red { color: var(--red); }
+.text-yellow { color: var(--yellow); }
+.text-muted { color: var(--text-muted); }
+.text-secondary { color: var(--text-secondary); }
+.font-mono { font-family: var(--font-mono); }

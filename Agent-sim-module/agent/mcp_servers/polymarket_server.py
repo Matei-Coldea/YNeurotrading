@@ -17,36 +17,43 @@ http_client = httpx.Client(base_url=GAMMA_API_URL, timeout=30)
 @function_tool
 def search_markets(
     query: Annotated[str, "Search query to match against market titles"],
-    limit: Annotated[int, "Maximum number of events to return"] = 10,
+    limit: Annotated[int, "Maximum number of events to return"] = 30,
+    volume_num_min: Annotated[int, "Minimum volume in USD to filter out low-activity markets"] = 5000,
 ) -> str:
-    """Search Polymarket for prediction markets matching a query. Returns events with their markets, outcomes, and prices."""
-    resp = http_client.get(
-        "/events",
-        params={"title_contains": query, "active": "true", "closed": "false", "limit": limit},
-    )
+    """Search Polymarket for prediction markets matching a query. Returns events sorted by volume (highest first) with their markets, outcomes, and prices."""
+    params: dict = {
+        "title_contains": query,
+        "active": "true",
+        "closed": "false",
+        "limit": limit,
+        "order": "volume",
+        "ascending": "false",
+    }
+    if volume_num_min:
+        params["volume_num_min"] = volume_num_min
+    resp = http_client.get("/events", params=params)
     resp.raise_for_status()
     events = resp.json()
     results = []
     for event in events:
         markets = event.get("markets", [])
-        results.append({
-            "event_id": event.get("id"),
-            "title": event.get("title"),
-            "description": event.get("description", "")[:300],
-            "end_date": event.get("endDate"),
-            "markets": [
-                {
-                    "market_id": m.get("id"),
-                    "question": m.get("question"),
-                    "outcomes": m.get("outcomes"),
-                    "outcome_prices": m.get("outcomePrices"),
-                    "volume": m.get("volume"),
-                    "liquidity": m.get("liquidity"),
-                    "token_ids": m.get("clobTokenIds") or [],
-                }
-                for m in markets
-            ],
-        })
+        # Pick only the highest-volume market per event to avoid flooding
+        # results with sub-markets from the same event (e.g., 50 state-level
+        # election markets from one "US Elections" event)
+        top = max(markets, key=lambda m: float(m.get("volume") or 0)) if markets else None
+        if top:
+            results.append({
+                "event_title": event.get("title"),
+                "market_id": top.get("id"),
+                "question": top.get("question"),
+                "outcomes": top.get("outcomes"),
+                "outcome_prices": top.get("outcomePrices"),
+                "volume": top.get("volume"),
+                "liquidity": top.get("liquidity"),
+                "end_date": top.get("endDate") or event.get("endDate"),
+                "token_ids": top.get("clobTokenIds") or [],
+                "other_markets_in_event": len(markets) - 1,
+            })
     return json.dumps(results, default=str)
 
 
@@ -76,13 +83,22 @@ def get_market_details(
 
 @function_tool
 def get_active_markets(
-    tag: Annotated[str, "Optional tag to filter markets (e.g., 'Politics', 'Sports')"] = "",
-    limit: Annotated[int, "Maximum number of markets to return"] = 20,
+    tag: Annotated[str, "Optional tag to filter markets (e.g., 'Politics', 'Sports', 'Pop Culture')"] = "",
+    limit: Annotated[int, "Maximum number of markets to return"] = 50,
+    volume_num_min: Annotated[int, "Minimum volume in USD to filter out low-activity markets"] = 10000,
 ) -> str:
-    """List active Polymarket markets, optionally filtered by tag. Good for discovering trading opportunities."""
-    params: dict = {"active": "true", "closed": "false", "limit": limit}
+    """List active Polymarket markets sorted by volume (highest first), optionally filtered by tag. Good for discovering trading opportunities with real liquidity."""
+    params: dict = {
+        "active": "true",
+        "closed": "false",
+        "limit": limit,
+        "order": "volume",
+        "ascending": "false",
+    }
     if tag:
         params["tag"] = tag
+    if volume_num_min:
+        params["volume_num_min"] = volume_num_min
     resp = http_client.get("/markets", params=params)
     resp.raise_for_status()
     markets = resp.json()

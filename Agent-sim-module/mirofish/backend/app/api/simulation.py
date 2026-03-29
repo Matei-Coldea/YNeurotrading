@@ -2059,6 +2059,90 @@ def get_simulation_posts(simulation_id: str):
         }), 500
 
 
+@simulation_bp.route('/<simulation_id>/posts-feed', methods=['GET'])
+def get_simulation_posts_feed(simulation_id: str):
+    """
+    Get posts with user info for Y.com feed display.
+    JOINs post and user tables to include author names/handles.
+
+    Query parameters:
+        platform: twitter/reddit (default: twitter)
+        limit: Return count (default: 50)
+        offset: Pagination offset
+    """
+    try:
+        platform = request.args.get('platform', 'twitter')
+        limit = request.args.get('limit', 50, type=int)
+        offset = request.args.get('offset', 0, type=int)
+
+        sim_dir = os.path.join(
+            os.path.dirname(__file__),
+            f'../../uploads/simulations/{simulation_id}'
+        )
+
+        db_file = f"{platform}_simulation.db"
+        db_path = os.path.join(sim_dir, db_file)
+
+        if not os.path.exists(db_path):
+            return jsonify({
+                "success": True,
+                "data": {
+                    "total": 0,
+                    "posts": []
+                }
+            })
+
+        import sqlite3
+        conn = sqlite3.connect(db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        try:
+            cursor.execute("""
+                SELECT p.post_id, p.user_id, p.content, p.quote_content,
+                       p.original_post_id, p.created_at,
+                       p.num_likes, p.num_dislikes, p.num_shares,
+                       u.user_name, u.name, u.bio, u.num_followers,
+                       op.content AS original_content,
+                       ou.user_name AS original_user_name,
+                       ou.name AS original_name
+                FROM post p
+                LEFT JOIN user u ON p.user_id = u.user_id
+                LEFT JOIN post op ON p.original_post_id = op.post_id
+                LEFT JOIN user ou ON op.user_id = ou.user_id
+                ORDER BY p.post_id DESC
+                LIMIT ? OFFSET ?
+            """, (limit, offset))
+
+            posts = [dict(row) for row in cursor.fetchall()]
+
+            cursor.execute("SELECT COUNT(*) FROM post")
+            total = cursor.fetchone()[0]
+
+        except sqlite3.OperationalError:
+            posts = []
+            total = 0
+
+        conn.close()
+
+        return jsonify({
+            "success": True,
+            "data": {
+                "total": total,
+                "count": len(posts),
+                "posts": posts
+            }
+        })
+
+    except Exception as e:
+        logger.error(f"Failed to get posts feed: {str(e)}")
+        return jsonify({
+            "success": False,
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        }), 500
+
+
 @simulation_bp.route('/<simulation_id>/comments', methods=['GET'])
 def get_simulation_comments(simulation_id: str):
     """
