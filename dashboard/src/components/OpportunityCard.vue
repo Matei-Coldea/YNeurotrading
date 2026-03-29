@@ -36,7 +36,7 @@
         class="btn btn-primary btn-sm"
         @click="$emit('start-simulation', opp.id)"
       >
-        {{ opp.status === 'simulation_running' ? 'Continue Simulation' : 'Run Simulation' }}
+        {{ opp.status === 'simulation_running' ? 'View Simulation' : 'Run Simulation' }}
       </button>
       <button
         v-if="opp.status === 'simulation_complete'"
@@ -54,8 +54,14 @@
       </template>
     </div>
 
-    <!-- Trade buttons — Polymarket-style Yes/No -->
-    <div v-if="opp.outcome_prices?.length >= 2" class="trade-section" @click.stop>
+    <!-- Executed fill -->
+    <div v-if="opp.status === 'trade_executed' && opp.trade_fill_price && opp.trade_side !== 'skip'" class="fill-row" @click.stop>
+      <span class="fill-label">Filled</span>
+      <span class="fill-detail font-mono">{{ opp.trade_fill_shares?.toFixed(1) }} shares @ ${{ opp.trade_fill_price?.toFixed(3) }}</span>
+    </div>
+
+    <!-- Trade buttons — only show when no trade executed/rejected -->
+    <div v-if="opp.outcome_prices?.length >= 2 && !['rejected', 'failed'].includes(opp.status)" class="trade-section" @click.stop>
       <div class="amount-row">
         <span class="amount-label">Amount</span>
         <div class="amount-presets">
@@ -77,12 +83,6 @@
           Buy No <span class="trade-price font-mono">${{ parseFloat(opp.outcome_prices[1]).toFixed(2) }}</span>
         </button>
       </div>
-    </div>
-
-    <!-- Executed fill -->
-    <div v-if="opp.status === 'trade_executed' && opp.trade_fill_price && opp.trade_side !== 'skip'" class="fill-row" @click.stop>
-      <span class="fill-label">Filled</span>
-      <span class="fill-detail font-mono">{{ opp.trade_fill_shares?.toFixed(1) }} shares @ ${{ opp.trade_fill_price?.toFixed(3) }}</span>
     </div>
 
     <div class="card-meta">

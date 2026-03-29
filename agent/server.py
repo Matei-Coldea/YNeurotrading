@@ -91,6 +91,13 @@ async def get_scan_status():
     return _scan_status
 
 
+@app.post("/api/agent/deduplicate")
+async def deduplicate():
+    """Remove duplicate opportunities (same market_id), keeping the most advanced one."""
+    removed = pipeline_db.deduplicate_opportunities()
+    return {"removed": removed}
+
+
 # ──── Opportunities ────
 
 
@@ -312,7 +319,7 @@ async def refresh_prices():
 
 @app.post("/api/agent/opportunities/{opp_id}/manual-trade")
 async def manual_trade(opp_id: str, request: Request):
-    """User manually buys Yes or No on an opportunity."""
+    """User manually buys Yes or No on an opportunity. Can buy multiple times."""
     body = await request.json()
     side = body.get("side", "buy")
     outcome = body.get("outcome", "Yes")
@@ -334,13 +341,21 @@ async def manual_trade(opp_id: str, request: Request):
 
     shares = amount / price
     portfolio.record_buy(token_id, opp.market_question, outcome, shares, price, amount)
+
+    # Accumulate fill info for repeated buys
+    prev_shares = opp.trade_fill_shares or 0
+    prev_cost = (opp.trade_amount_usd or 0)
+    total_shares = prev_shares + shares
+    total_cost = prev_cost + amount
+    avg_price = total_cost / total_shares if total_shares > 0 else price
+
     pipeline_db.update_opportunity(opp_id,
         status="trade_executed",
         trade_side="buy",
         trade_outcome=outcome,
-        trade_amount_usd=amount,
-        trade_fill_price=price,
-        trade_fill_shares=shares,
+        trade_amount_usd=total_cost,
+        trade_fill_price=avg_price,
+        trade_fill_shares=total_shares,
     )
     pipeline_db.add_event("trade_executed", opportunity_id=opp_id, payload={
         "side": "buy", "outcome": outcome, "shares": round(shares, 4),

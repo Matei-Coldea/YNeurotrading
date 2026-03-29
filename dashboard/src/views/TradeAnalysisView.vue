@@ -52,7 +52,12 @@
       <section v-if="opp.simulation_report_summary" class="trade-section">
         <h2>Simulation Report Summary</h2>
         <div class="card">
-          <p class="report-text">{{ opp.simulation_report_summary }}</p>
+          <div class="report-preview">
+            <div class="report-rendered" v-html="renderedReport"></div>
+          </div>
+          <a v-if="opp.mirofish_report_id"
+             :href="`http://localhost:3000/report/${opp.mirofish_report_id}`"
+             target="_blank" class="report-full-link">Read full report →</a>
         </div>
       </section>
 
@@ -108,6 +113,32 @@
           Filled: {{ opp.trade_fill_shares?.toFixed(2) }} shares @ ${{ opp.trade_fill_price?.toFixed(4) }}
         </div>
       </section>
+
+      <!-- Manual Trade -->
+      <section v-if="opp.outcome_prices?.length >= 2 && !['rejected', 'failed'].includes(opp.status)" class="trade-section">
+        <h2>Trade</h2>
+        <div class="amount-row">
+          <span class="amount-label">Amount</span>
+          <div class="amount-presets">
+            <button v-for="a in [10, 25, 50, 100, 250]" :key="a"
+              class="preset-btn" :class="{ active: tradeAmount === a }"
+              @click="tradeAmount = a"
+            >${{ a }}</button>
+          </div>
+          <div class="amount-input-wrap">
+            <span class="amount-sign">$</span>
+            <input type="number" v-model.number="tradeAmount" min="1" class="amount-input font-mono" />
+          </div>
+        </div>
+        <div class="trade-pair">
+          <button class="trade-btn trade-yes" @click="doManualTrade('Yes')">
+            Buy Yes <span class="trade-price font-mono">${{ formatPrice(opp.outcome_prices[0]) }}</span>
+          </button>
+          <button class="trade-btn trade-no" @click="doManualTrade('No')">
+            Buy No <span class="trade-price font-mono">${{ formatPrice(opp.outcome_prices[1]) }}</span>
+          </button>
+        </div>
+      </section>
     </div>
 
     <div v-else class="loading">Loading...</div>
@@ -115,14 +146,21 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { getOpportunity, analyzeReport, approveTrade, rejectTrade } from '../api/agent'
+import { marked } from 'marked'
+import { getOpportunity, analyzeReport, approveTrade, rejectTrade, manualTrade } from '../api/agent'
 
 const props = defineProps({ id: String })
 const router = useRouter()
 const opp = ref(null)
 const analyzing = ref(false)
+const tradeAmount = ref(50)
+
+const renderedReport = computed(() => {
+  if (!opp.value?.simulation_report_summary) return ''
+  return marked.parse(opp.value.simulation_report_summary)
+})
 
 async function load() {
   const res = await getOpportunity(props.id)
@@ -151,6 +189,15 @@ async function doRejectTrade() {
   await load()
 }
 
+async function doManualTrade(outcome) {
+  try {
+    await manualTrade(props.id, { side: 'buy', outcome, amount_usd: tradeAmount.value })
+    await load()
+  } catch (e) {
+    console.error('Trade failed:', e)
+  }
+}
+
 function formatPrice(p) { return p ? parseFloat(p).toFixed(2) : '—' }
 function sentColor(key) {
   return { bullish: 'fill-green', bearish: 'fill-red', neutral: 'fill-yellow', positive: 'fill-green', negative: 'fill-red' }[key.toLowerCase()] || 'fill-blue'
@@ -166,7 +213,7 @@ onMounted(load)
   padding: 0 24px; height: 60px; background: #000; color: #fff;
 }
 .detail-header .logo { font-family: var(--font-mono); font-size: 14px; font-weight: 800; letter-spacing: 2px; color: #fff; margin: 0; }
-.detail-header .btn { color: #fff; border-color: #444; }
+.detail-header .btn { color: #fff; border-color: #444; background: transparent; }
 .detail-header .btn:hover { background: #222; }
 
 .trade-body { max-width: 700px; margin: 0 auto; padding: 24px; }
@@ -181,7 +228,42 @@ onMounted(load)
 .links-row { display: flex; gap: 8px; flex-wrap: wrap; }
 .links-row .btn { text-decoration: none; }
 
-.report-text { font-size: 14px; line-height: 1.6; color: var(--text-secondary); white-space: pre-wrap; }
+.report-preview {
+  position: relative;
+  max-height: 200px;
+  overflow: hidden;
+}
+.report-preview::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 60px;
+  background: linear-gradient(to bottom, transparent, var(--bg-card));
+  pointer-events: none;
+}
+.report-full-link {
+  display: inline-block;
+  margin-top: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent);
+  text-decoration: none;
+}
+.report-full-link:hover { text-decoration: underline; }
+.report-rendered { font-size: 14px; line-height: 1.6; color: var(--text-secondary); }
+.report-rendered :deep(h1),
+.report-rendered :deep(h2),
+.report-rendered :deep(h3) { font-size: 15px; font-weight: 600; color: var(--text-primary); margin: 14px 0 6px; }
+.report-rendered :deep(h4),
+.report-rendered :deep(h5) { font-size: 13px; font-weight: 600; color: var(--text-primary); margin: 10px 0 4px; text-transform: uppercase; letter-spacing: 0.3px; }
+.report-rendered :deep(p) { margin: 0 0 10px; }
+.report-rendered :deep(ul),
+.report-rendered :deep(ol) { margin: 0 0 10px; padding-left: 20px; }
+.report-rendered :deep(li) { margin-bottom: 4px; }
+.report-rendered :deep(strong) { color: var(--text-primary); }
+.report-rendered :deep(blockquote) { border-left: 3px solid var(--border); padding-left: 12px; color: var(--text-muted); margin: 8px 0; }
 
 .sentiment-bars { display: flex; flex-direction: column; gap: 8px; }
 .sent-row { display: flex; align-items: center; gap: 10px; }
@@ -201,6 +283,84 @@ onMounted(load)
 
 .actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .fill-result { font-size: 14px; font-weight: 600; }
+
+/* Trade section */
+.amount-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.amount-label {
+  font-size: 12px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  letter-spacing: 0.5px;
+}
+.amount-presets { display: flex; gap: 4px; }
+.preset-btn {
+  padding: 4px 10px;
+  font-size: 12px;
+  font-family: var(--font-mono);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-primary);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.preset-btn:hover { background: var(--bg-secondary); }
+.preset-btn.active {
+  background: var(--text-primary);
+  color: var(--bg-primary);
+  border-color: var(--text-primary);
+}
+.amount-input-wrap {
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0 8px;
+  margin-left: auto;
+}
+.amount-sign { font-size: 13px; color: var(--text-muted); }
+.amount-input {
+  width: 60px;
+  border: none;
+  outline: none;
+  font-size: 13px;
+  padding: 4px 2px;
+  background: transparent;
+  color: var(--text-primary);
+}
+.amount-input::-webkit-inner-spin-button { -webkit-appearance: none; }
+.trade-pair { display: flex; gap: 10px; }
+.trade-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 0;
+  border-radius: var(--radius);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+  border: 1.5px solid;
+}
+.trade-yes {
+  background: var(--green-dim);
+  border-color: var(--green);
+  color: #2e7d32;
+}
+.trade-yes:hover { background: var(--green); color: #fff; }
+.trade-no {
+  background: var(--red-dim);
+  border-color: var(--red);
+  color: #c62828;
+}
+.trade-no:hover { background: var(--red); color: #fff; }
+.trade-price { font-size: 14px; opacity: 0.8; }
 
 .spinner-sm {
   display: inline-block; width: 14px; height: 14px;

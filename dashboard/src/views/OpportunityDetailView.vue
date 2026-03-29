@@ -6,12 +6,33 @@
     </header>
 
     <div v-if="opp" class="detail-body">
+      <!-- Status & Action Bar -->
+      <div class="action-bar">
+        <div class="action-bar-left">
+          <span class="badge" :class="statusBadgeClass">{{ statusLabel }}</span>
+          <span class="action-hint">{{ actionText }}</span>
+        </div>
+        <div class="action-bar-right">
+          <button v-if="showRunSim" class="btn btn-primary btn-sm"
+            @click="$router.push(`/opportunity/${opp.id}/simulation`)">
+            {{ opp.status === 'simulation_running' ? 'View Simulation' : 'Run Simulation' }}
+          </button>
+          <button v-if="opp.status === 'simulation_complete'" class="btn btn-primary btn-sm"
+            @click="$router.push(`/opportunity/${opp.id}/trade`)">
+            Analyze Trade
+          </button>
+          <button v-if="opp.mirofish_simulation_id" class="btn btn-sm sim-link-btn"
+            @click="$router.push(`/opportunity/${opp.id}/simulation`)">
+            Simulation Dashboard
+          </button>
+        </div>
+      </div>
+
       <!-- Market Overview -->
       <section class="detail-section">
         <h2>Market Overview</h2>
         <div class="card">
           <div class="detail-badge-row">
-            <span class="badge" :class="statusBadgeClass">{{ opp.status }}</span>
             <span v-if="opp.tags?.length" v-for="tag in opp.tags" :key="tag" class="badge badge-blue">{{ tag }}</span>
           </div>
           <h3 class="market-q">{{ opp.market_question }}</h3>
@@ -55,19 +76,16 @@
         </div>
       </section>
 
-      <!-- Web Research -->
-      <section v-if="opp.web_research_summary" class="detail-section">
-        <h2>Web Research</h2>
-        <div class="card">
-          <p class="research-text">{{ opp.web_research_summary }}</p>
-        </div>
-      </section>
-
       <!-- Simulation Results -->
       <section v-if="opp.simulation_report_summary" class="detail-section">
         <h2>Simulation Results</h2>
         <div class="card">
-          <p>{{ opp.simulation_report_summary }}</p>
+          <div class="report-preview">
+            <div class="report-rendered" v-html="renderedReport"></div>
+          </div>
+          <a v-if="opp.mirofish_report_id"
+             :href="`http://localhost:3000/report/${opp.mirofish_report_id}`"
+             target="_blank" class="report-full-link">Read full report →</a>
           <div v-if="opp.simulation_sentiment" class="sentiment-row">
             <div v-for="(val, key) in opp.simulation_sentiment" :key="key" class="sentiment-item">
               <span class="sentiment-label">{{ key }}</span>
@@ -101,7 +119,7 @@
       </section>
 
       <!-- Trade -->
-      <section v-if="opp.outcome_prices?.length >= 2" class="detail-section">
+      <section v-if="opp.outcome_prices?.length >= 2 && !['rejected', 'failed'].includes(opp.status)" class="detail-section">
         <h2>Trade</h2>
         <div class="amount-row">
           <span class="amount-label">Amount</span>
@@ -126,30 +144,12 @@
         </div>
       </section>
 
-      <section v-if="opp.status === 'trade_executed' && opp.trade_fill_price && opp.trade_side !== 'skip'" class="detail-section">
+      <section v-if="opp.status === 'trade_executed' && opp.trade_fill_price && opp.trade_side !== 'skip' && !opp.trade_reasoning" class="detail-section">
         <h2>Position</h2>
         <div class="card fill-card">
           <span class="fill-label">Filled</span>
           <span class="font-mono">{{ opp.trade_fill_shares?.toFixed(2) }} shares @ ${{ opp.trade_fill_price?.toFixed(4) }}</span>
         </div>
-      </section>
-
-      <!-- Actions -->
-      <section class="detail-section actions-section">
-        <button
-          v-if="(opp.status === 'discovered' && (opp.simulation_potential || 0) >= 3) || opp.status === 'simulation_running'"
-          class="btn btn-primary"
-          @click="$router.push(`/opportunity/${opp.id}/simulation`)"
-        >
-          {{ opp.status === 'simulation_running' ? 'Continue Simulation' : 'Run Simulation' }}
-        </button>
-        <button
-          v-if="opp.status === 'simulation_complete'"
-          class="btn btn-primary"
-          @click="$router.push(`/opportunity/${opp.id}/trade`)"
-        >
-          Analyze Trade
-        </button>
       </section>
     </div>
 
@@ -159,8 +159,8 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-
 import { useRouter } from 'vue-router'
+import { marked } from 'marked'
 import { getOpportunity, analyzeReport, approveTrade, rejectTrade, manualTrade } from '../api/agent'
 
 const props = defineProps({ id: String })
@@ -175,6 +175,40 @@ const statusBadgeClass = computed(() => {
     trade_executed: 'badge-green', rejected: 'badge-red', failed: 'badge-red',
   }
   return map[opp.value?.status] || 'badge-blue'
+})
+
+const statusLabel = computed(() => {
+  const map = {
+    discovered: 'New', simulation_proposed: 'Sim Proposed',
+    simulation_approved: 'Starting Sim', simulation_running: 'Simulating',
+    simulation_complete: 'Sim Complete', trade_proposed: 'Trade Ready',
+    trade_approved: 'Trading', trade_executed: 'Executed',
+    rejected: 'Rejected', failed: 'Failed',
+  }
+  return map[opp.value?.status] || opp.value?.status
+})
+
+const showRunSim = computed(() => {
+  const s = opp.value?.status
+  return (s === 'discovered' && (opp.value?.simulation_potential || 0) >= 3) ||
+         s === 'simulation_running' || s === 'simulation_approved'
+})
+
+const renderedReport = computed(() => {
+  if (!opp.value?.simulation_report_summary) return ''
+  return marked.parse(opp.value.simulation_report_summary)
+})
+
+const actionText = computed(() => {
+  const map = {
+    discovered: 'Ready for analysis',
+    simulation_running: 'Simulation in progress',
+    simulation_complete: 'Ready for trade analysis',
+    trade_proposed: 'Review agent recommendation',
+    trade_executed: 'Position open',
+    rejected: 'Dismissed',
+  }
+  return map[opp.value?.status] || ''
 })
 
 async function load() {
@@ -221,9 +255,43 @@ onMounted(load)
   padding: 0 24px; height: 60px; background: #000; color: #fff;
 }
 .detail-header .logo { font-family: var(--font-mono); font-size: 14px; font-weight: 800; letter-spacing: 2px; color: #fff; margin: 0; }
-.detail-header .btn { color: #fff; border-color: #444; }
+.detail-header .btn { color: #fff; border-color: #444; background: transparent; }
 .detail-header .btn:hover { background: #222; }
 .detail-body { max-width: 800px; margin: 0 auto; padding: 24px; }
+.action-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  margin-bottom: 24px;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.action-bar-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.action-hint {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.action-bar-right {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.sim-link-btn {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.sim-link-btn:hover {
+  background: var(--accent);
+  color: #fff;
+}
 .detail-section { margin-bottom: 24px; }
 .detail-section h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); margin-bottom: 8px; }
 .detail-badge-row { display: flex; gap: 6px; margin-bottom: 8px; }
@@ -236,7 +304,42 @@ onMounted(load)
 .meta-row { display: flex; gap: 16px; font-size: 12px; color: var(--text-muted); }
 .analysis-text { font-size: 14px; line-height: 1.6; color: var(--text-secondary); }
 .sim-rationale { font-size: 13px; color: var(--text-muted); margin-top: 8px; }
-.research-text { font-size: 14px; line-height: 1.6; color: var(--text-secondary); white-space: pre-wrap; }
+.report-preview {
+  position: relative;
+  max-height: 200px;
+  overflow: hidden;
+}
+.report-preview::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 60px;
+  background: linear-gradient(to bottom, transparent, var(--bg-card));
+  pointer-events: none;
+}
+.report-full-link {
+  display: inline-block;
+  margin-top: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent);
+  text-decoration: none;
+}
+.report-full-link:hover { text-decoration: underline; }
+.report-rendered { font-size: 14px; line-height: 1.6; color: var(--text-secondary); }
+.report-rendered :deep(h1),
+.report-rendered :deep(h2),
+.report-rendered :deep(h3) { font-size: 15px; font-weight: 600; color: var(--text-primary); margin: 14px 0 6px; }
+.report-rendered :deep(h4),
+.report-rendered :deep(h5) { font-size: 13px; font-weight: 600; color: var(--text-primary); margin: 10px 0 4px; text-transform: uppercase; letter-spacing: 0.3px; }
+.report-rendered :deep(p) { margin: 0 0 10px; }
+.report-rendered :deep(ul),
+.report-rendered :deep(ol) { margin: 0 0 10px; padding-left: 20px; }
+.report-rendered :deep(li) { margin-bottom: 4px; }
+.report-rendered :deep(strong) { color: var(--text-primary); }
+.report-rendered :deep(blockquote) { border-left: 3px solid var(--border); padding-left: 12px; color: var(--text-muted); margin: 8px 0; }
 .sentiment-row { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
 .sentiment-item { display: flex; align-items: center; gap: 8px; }
 .sentiment-label { width: 60px; font-size: 12px; text-transform: capitalize; color: var(--text-secondary); }
@@ -250,7 +353,6 @@ onMounted(load)
 .trade-summary { display: flex; justify-content: space-between; padding: 8px; background: var(--bg-secondary); border-radius: var(--radius-sm); margin: 8px 0; font-weight: 600; }
 .trade-actions { display: flex; gap: 8px; margin-top: 12px; }
 .trade-fill { margin-top: 8px; font-size: 13px; }
-.actions-section { display: flex; gap: 8px; }
 
 /* Amount selector */
 .amount-row {

@@ -19,6 +19,10 @@ export function getScanStatus() {
   return api.get('/scan/status')
 }
 
+export function deduplicate() {
+  return api.post('/deduplicate')
+}
+
 // ── Opportunities ──
 
 export function getOpportunities(status = null) {

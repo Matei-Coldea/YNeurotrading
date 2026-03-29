@@ -109,8 +109,15 @@ async def run_scan(db: PipelineDB, req: ScanRequest | None = None) -> int:
     # Parse opportunities from agent output
     json_objects = _parse_json_objects(result.final_output)
     count = 0
+    existing_opps = db.list_opportunities()
+    existing_market_ids = {opp.market_id for opp in existing_opps if opp.market_id}
+    existing_questions = {opp.market_question.strip().lower() for opp in existing_opps}
     for obj in json_objects:
         if "market_question" not in obj:
+            continue
+        market_id = obj.get("market_id", "")
+        question = obj["market_question"].strip().lower()
+        if (market_id and market_id in existing_market_ids) or question in existing_questions:
             continue
         opp_id = f"opp_{uuid.uuid4().hex[:8]}"
         opp = Opportunity(

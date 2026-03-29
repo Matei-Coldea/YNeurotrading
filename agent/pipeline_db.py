@@ -155,6 +155,32 @@ class PipelineDB:
                 pass
         return Opportunity(**d)
 
+    def deduplicate_opportunities(self) -> int:
+        """Remove duplicate opportunities keeping the most advanced one per market question."""
+        status_priority = {
+            'trade_executed': 7, 'trade_approved': 6, 'trade_proposed': 5,
+            'simulation_complete': 4, 'simulation_running': 3, 'simulation_approved': 2,
+            'simulation_proposed': 1, 'discovered': 0, 'rejected': -1, 'failed': -2,
+        }
+        opps = self.list_opportunities()
+        by_question = {}
+        for opp in opps:
+            q = opp.market_question.strip().lower()
+            if q not in by_question:
+                by_question[q] = []
+            by_question[q].append(opp)
+
+        removed = 0
+        with self._conn() as conn:
+            for q, dupes in by_question.items():
+                if len(dupes) <= 1:
+                    continue
+                dupes.sort(key=lambda o: (status_priority.get(o.status, -10), o.updated_at or ''), reverse=True)
+                for opp in dupes[1:]:
+                    conn.execute("DELETE FROM opportunities WHERE id = ?", (opp.id,))
+                    removed += 1
+        return removed
+
     # --- Events ---
 
     def add_event(self, event_type: str, opportunity_id: str | None = None, payload: dict | None = None) -> Event:

@@ -87,7 +87,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import {
-  startScan, getScanStatus, getOpportunities,
+  startScan, getScanStatus, getOpportunities, deduplicate,
   analyzeReport, approveTrade, rejectTrade, manualTrade, refreshPrices,
 } from '../api/agent'
 import PipelineFunnel from '../components/PipelineFunnel.vue'
@@ -106,7 +106,13 @@ const eventFeedRef = ref(null)
 // Split opportunities into simulation-ready and other
 const filteredOpps = computed(() => {
   if (!activeFilter.value) return allOpportunities.value
-  return allOpportunities.value.filter(o => o.status === activeFilter.value)
+  // Match grouped statuses (same groups as PipelineFunnel counts)
+  const statusGroups = {
+    simulation_running: ['simulation_running', 'simulation_approved'],
+    trade_executed: ['trade_executed', 'trade_approved'],
+  }
+  const statuses = statusGroups[activeFilter.value] || [activeFilter.value]
+  return allOpportunities.value.filter(o => statuses.includes(o.status))
 })
 
 const simReadyOpps = computed(() =>
@@ -141,12 +147,13 @@ async function loadOpportunities() {
 async function triggerScan() {
   try {
     scanStatus.value = 'running'
+    eventFeedRef.value?.addEvent('scan_started')
     await startScan({ limit: 10 })
-    // Poll for completion
     pollScan()
   } catch (e) {
     console.error('Scan failed:', e)
     scanStatus.value = 'idle'
+    eventFeedRef.value?.addEvent('error', { message: 'Scan failed' })
   }
 }
 
@@ -158,6 +165,9 @@ async function pollScan() {
       if (res.data.status === 'complete' || res.data.status === 'idle') {
         clearInterval(interval)
         await loadOpportunities()
+        if (res.data.status === 'complete') {
+          eventFeedRef.value?.addEvent('scan_complete', { opportunities_found: res.data.opportunities_found || allOpportunities.value.length })
+        }
       }
     } catch {
       clearInterval(interval)
@@ -167,7 +177,15 @@ async function pollScan() {
 }
 
 function goToOpportunity(id) {
-  router.push(`/opportunity/${id}`)
+  const opp = allOpportunities.value.find(o => o.id === id)
+  if (!opp) { router.push(`/opportunity/${id}`); return }
+  if (['simulation_running', 'simulation_approved'].includes(opp.status)) {
+    router.push(`/opportunity/${id}/simulation`)
+  } else if (['simulation_complete', 'trade_proposed'].includes(opp.status)) {
+    router.push(`/opportunity/${id}/trade`)
+  } else {
+    router.push(`/opportunity/${id}`)
+  }
 }
 
 function handleStartSimulation(id) {
@@ -176,10 +194,13 @@ function handleStartSimulation(id) {
 
 async function handleAnalyzeReport(id) {
   try {
+    eventFeedRef.value?.addEvent('report_started', { market_question: allOpportunities.value.find(o => o.id === id)?.market_question })
     await analyzeReport(id)
     await loadOpportunities()
+    eventFeedRef.value?.addEvent('trade_proposed')
   } catch (e) {
     console.error('Failed to analyze report:', e)
+    eventFeedRef.value?.addEvent('error', { message: 'Analysis failed' })
   }
 }
 
@@ -188,6 +209,7 @@ async function handleApproveTrade(id) {
     await approveTrade(id)
     await loadOpportunities()
     portfolioPanel.value?.refresh()
+    eventFeedRef.value?.addEvent('trade_approved')
   } catch (e) {
     console.error('Failed to approve trade:', e)
   }
@@ -197,6 +219,7 @@ async function handleRejectTrade(id) {
   try {
     await rejectTrade(id)
     await loadOpportunities()
+    eventFeedRef.value?.addEvent('trade_rejected')
   } catch (e) {
     console.error('Failed to reject trade:', e)
   }
@@ -204,18 +227,24 @@ async function handleRejectTrade(id) {
 
 async function handleManualTrade({ id, outcome, amount }) {
   try {
-    await manualTrade(id, { side: 'buy', outcome, amount_usd: amount || 50 })
+    const result = await manualTrade(id, { side: 'buy', outcome, amount_usd: amount || 50 })
     await loadOpportunities()
     portfolioPanel.value?.refresh()
+    eventFeedRef.value?.addEvent('trade_executed', {
+      side: 'buy', outcome,
+      shares: result.data?.shares, avg_price: result.data?.price,
+    })
   } catch (e) {
     console.error('Manual trade failed:', e)
+    eventFeedRef.value?.addEvent('error', { message: 'Trade failed' })
   }
 }
 
 let priceTimer = null
 
 onMounted(async () => {
-  // Show opportunities immediately from DB
+  // Clean up any existing duplicates, then load
+  deduplicate().catch(() => {})
   await loadOpportunities()
 
   // Refresh prices in background, then reload
