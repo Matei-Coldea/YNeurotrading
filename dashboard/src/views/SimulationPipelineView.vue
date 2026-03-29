@@ -153,6 +153,27 @@ let pollTimer = null
 
 const marketQuestion = computed(() => opp.value?.market_question || '')
 
+// Pick the deepest MiroFish URL based on current progress
+function pickMirofishUrl(opportunity, progress = {}) {
+  const { mirofish_project_id, mirofish_simulation_id, mirofish_report_id } = opportunity
+  const base = 'http://localhost:3000'
+
+  // Report ready → report view
+  if (mirofish_report_id) return `${base}/report/${mirofish_report_id}`
+
+  if (mirofish_simulation_id) {
+    const s = progress.runner_status
+    // Simulation has been started (running, completed, etc.) → running view
+    if (s || progress.current_round > 0) return `${base}/simulation/${mirofish_simulation_id}/start`
+    // Simulation created but not started → preparation view
+    return `${base}/simulation/${mirofish_simulation_id}`
+  }
+
+  // Only project exists → process wizard
+  if (mirofish_project_id) return `${base}/process/${mirofish_project_id}`
+  return null
+}
+
 const isSimComplete = computed(() => {
   const s = simProgress.value.runner_status
   return s === 'completed' || s === 'complete' || s === 'done' || s === 'stopped'
@@ -187,8 +208,16 @@ onMounted(async () => {
     opp.value = res.data.opportunity
 
     if (opp.value.mirofish_project_id) {
-      // Already has a project — show status overview
-      iframeUrl.value = `http://localhost:3000/process/${opp.value.mirofish_project_id}`
+      // Fetch current progress to pick the right MiroFish URL
+      let progress = {}
+      if (opp.value.mirofish_simulation_id) {
+        try {
+          const statusRes = await getRunStatus(opp.value.mirofish_simulation_id)
+          progress = statusRes.data?.data || statusRes.data || {}
+          simProgress.value = progress
+        } catch {}
+      }
+      iframeUrl.value = pickMirofishUrl(opp.value, progress)
       preparing.value = false
       startPolling()
     } else {
