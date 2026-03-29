@@ -54,6 +54,7 @@ class OasisAgentProfile:
     # Source entity information
     source_entity_uuid: Optional[str] = None
     source_entity_type: Optional[str] = None
+    generated_by: Optional[str] = None
     
     created_at: str = field(default_factory=lambda: datetime.now().strftime("%Y-%m-%d"))
     
@@ -67,6 +68,7 @@ class OasisAgentProfile:
             "persona": self.persona,
             "karma": self.karma,
             "created_at": self.created_at,
+            "generated_by": self.generated_by,
         }
 
         # Add additional persona information (if available)
@@ -97,6 +99,7 @@ class OasisAgentProfile:
             "follower_count": self.follower_count,
             "statuses_count": self.statuses_count,
             "created_at": self.created_at,
+            "generated_by": self.generated_by,
         }
 
         # Add additional persona information
@@ -135,6 +138,7 @@ class OasisAgentProfile:
             "interested_topics": self.interested_topics,
             "source_entity_uuid": self.source_entity_uuid,
             "source_entity_type": self.source_entity_type,
+            "generated_by": self.generated_by,
             "created_at": self.created_at,
         }
 
@@ -185,9 +189,18 @@ class OasisProfileGenerator:
         storage: Optional[GraphStorage] = None,
         graph_id: Optional[str] = None
     ):
-        self.api_key = api_key or Config.LLM_API_KEY
-        self.base_url = base_url or Config.LLM_BASE_URL
-        self.model_name = model_name or Config.LLM_MODEL_NAME
+        # Use Hermes (Nous Research) for humanistic persona generation when available
+        if Config.HERMES_API_KEY and not api_key:
+            self.api_key = Config.HERMES_API_KEY
+            self.base_url = Config.HERMES_BASE_URL
+            self.model_name = Config.HERMES_MODEL_NAME
+            self.using_hermes = True
+            logger.info(f"[Hermes] Using Nous Research Hermes for profile generation: {self.model_name}")
+        else:
+            self.api_key = api_key or Config.LLM_API_KEY
+            self.base_url = base_url or Config.LLM_BASE_URL
+            self.model_name = model_name or Config.LLM_MODEL_NAME
+            self.using_hermes = False
 
         if not self.api_key:
             raise ValueError("LLM_API_KEY not configured")
@@ -263,6 +276,7 @@ class OasisProfileGenerator:
             interested_topics=profile_data.get("interested_topics", []),
             source_entity_uuid=entity.uuid,
             source_entity_type=entity_type,
+            generated_by="hermes" if self.using_hermes else None,
         )
     
     def _generate_username(self, name: str) -> str:
@@ -615,7 +629,10 @@ class OasisProfileGenerator:
     
     def _get_system_prompt(self, is_individual: bool) -> str:
         """Get system prompt"""
-        base_prompt = "You are an expert in generating social media user profiles. Generate detailed, realistic personas for opinion simulation that maximize restoration of existing reality. Must return valid JSON format with all string values containing no unescaped newlines. Use English."
+        if self.using_hermes:
+            base_prompt = "You are Hermes, an AI with deep understanding of human nature, psychology, and social dynamics. Draw on your humanistic training to create personas that feel genuinely real — with internal contradictions, specific life experiences, and authentic voices. Generate detailed, realistic personas for opinion simulation that maximize restoration of existing reality. Must return valid JSON format with all string values containing no unescaped newlines. Use English."
+        else:
+            base_prompt = "You are an expert in generating social media user profiles. Generate detailed, realistic personas for opinion simulation that maximize restoration of existing reality. Must return valid JSON format with all string values containing no unescaped newlines. Use English."
         return base_prompt
     
     def _build_individual_persona_prompt(

@@ -32,6 +32,11 @@ class Config:
     LLM_BASE_URL = os.environ.get('LLM_BASE_URL', 'http://localhost:11434/v1')
     LLM_MODEL_NAME = os.environ.get('LLM_MODEL_NAME', 'qwen2.5:32b')
 
+    # Hermes (Nous Research) via OpenRouter — for humanistic persona generation
+    HERMES_API_KEY = os.environ.get('HERMES_API_KEY')
+    HERMES_BASE_URL = os.environ.get('HERMES_BASE_URL', 'https://openrouter.ai/api/v1')
+    HERMES_MODEL_NAME = os.environ.get('HERMES_MODEL_NAME', 'nousresearch/hermes-3-llama-3.1-70b')
+
     # Neo4j configuration (supports both NEO4J_USER and NEO4J_USERNAME)
     NEO4J_URI = os.environ.get('NEO4J_URI', 'bolt://localhost:7687')
     NEO4J_USER = os.environ.get('NEO4J_USERNAME', os.environ.get('NEO4J_USER', 'neo4j'))

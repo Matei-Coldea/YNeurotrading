@@ -2,7 +2,10 @@
   <div class="persona-card">
     <div class="persona-avatar" :style="{ background: color }">{{ initials }}</div>
     <div class="persona-info">
-      <span class="persona-name">{{ persona.name || persona.user_name }}</span>
+      <div class="persona-name-row">
+        <span class="persona-name">{{ persona.name || persona.user_name }}</span>
+        <span v-if="persona.generated_by === 'hermes'" class="hermes-badge" title="Persona powered by Nous Research Hermes">Hermes</span>
+      </div>
       <span class="persona-role text-muted">{{ persona.bio || persona.persona?.slice(0, 60) }}</span>
     </div>
   </div>
@@ -49,10 +52,24 @@ const color = computed(() => {
   flex-direction: column;
   min-width: 0;
 }
+.persona-name-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
 .persona-name {
   font-size: 12px;
   font-weight: 600;
   color: var(--text-primary);
+}
+.hermes-badge {
+  font-size: 9px;
+  font-weight: 700;
+  color: #a855f7;
+  background: rgba(168, 85, 247, 0.12);
+  padding: 1px 5px;
+  border-radius: 8px;
+  white-space: nowrap;
 }
 .persona-role {
   font-size: 11px;

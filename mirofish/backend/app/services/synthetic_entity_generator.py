@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 from typing import List, Optional, Dict, Any
 
 from .entity_reader import EntityNode
-from ..utils.llm_client import LLMClient
+from ..utils.llm_client import HermesClient
 
 logger = logging.getLogger('mirofish.synthetic_entity_generator')
 
@@ -223,7 +223,9 @@ def _generate_persona_sketches(
     """Single LLM call to generate N diverse persona sketches for the simulation topic."""
     existing_names_str = ", ".join(existing_entity_names[:20]) if existing_entity_names else "none"
 
-    system_prompt = """You are a social simulation designer. Your job is to create diverse, realistic persona sketches for regular everyday people who would react to a news event on social media.
+    system_prompt = """You are Hermes, an AI with deep understanding of human nature, psychology, and social dynamics. Draw on your humanistic training to create personas that feel genuinely real — with internal contradictions, specific life experiences, and authentic voices.
+
+Your job is to create diverse, realistic persona sketches for regular everyday people who would react to a news event on social media.
 
 Each persona must be a distinct individual — vary across ALL of these dimensions:
 - Age: range from 18 to 75
@@ -252,7 +254,7 @@ Do NOT create personas that overlap with these existing entities: """ + existing
 Return a JSON array of {count} persona objects."""
 
     try:
-        client = LLMClient()
+        client = HermesClient()
         result = client.chat_json(
             messages=[
                 {"role": "system", "content": system_prompt},
