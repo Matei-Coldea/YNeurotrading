@@ -36,6 +36,16 @@ export function getSimulationConfig(simulationId) {
   return api.get(`/simulation/${simulationId}/config`)
 }
 
+// ── Report Generation ──
+
+export function generateReport(simulationId) {
+  return api.post('/report/generate', { simulation_id: simulationId })
+}
+
+export function getReportGenerationStatus(taskId, simulationId) {
+  return api.post('/report/generate/status', { task_id: taskId, simulation_id: simulationId })
+}
+
 // ── Report Data ──
 
 export function getReport(reportId) {

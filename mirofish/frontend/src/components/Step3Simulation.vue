@@ -684,11 +684,40 @@ watch(() => props.systemLogs?.length, () => {
   })
 })
 
-onMounted(() => {
+onMounted(async () => {
   addLog('Step3 Simulation initialization')
-  if (props.simulationId) {
-    doStartSimulation()
+  if (!props.simulationId) return
+
+  // Check if simulation is already running or completed before starting fresh
+  try {
+    const res = await getRunStatus(props.simulationId)
+    const data = res.data || res
+
+    if (data.runner_status === 'completed' || data.runner_status === 'stopped') {
+      // Already completed — show report generation button
+      phase.value = 2
+      runStatus.value = data
+      emit('update-status', 'completed')
+      addLog(`Simulation already completed (${data.twitter_actions_count || 0} actions). Ready for report.`)
+      return
+    }
+
+    if (data.runner_status === 'running' || data.twitter_current_round > 0) {
+      // Already running — resume polling
+      phase.value = 1
+      runStatus.value = data
+      startStatusPolling()
+      startDetailPolling()
+      emit('update-status', 'processing')
+      addLog(`Resuming simulation (round ${data.twitter_current_round || 0}/${data.total_rounds || '?'})`)
+      return
+    }
+  } catch {
+    // run-status not available — simulation hasn't started yet
   }
+
+  // Not running, not completed — start fresh
+  doStartSimulation()
 })
 
 onUnmounted(() => {
