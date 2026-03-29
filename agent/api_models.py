@@ -43,6 +43,7 @@ class Opportunity(BaseModel):
     trade_fill_price: float | None = None
     trade_fill_shares: float | None = None
     web_research_summary: str | None = None
+    ensemble_agreement: float | None = None
     # Timestamps
     created_at: str = Field(default_factory=lambda: datetime.now().isoformat())
     updated_at: str = Field(default_factory=lambda: datetime.now().isoformat())

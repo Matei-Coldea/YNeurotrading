@@ -34,7 +34,8 @@ from prompts.simulation_prompts import (
     SEED_GENERATION_PROMPT_INDIRECT,
     SEED_GENERATION_PROMPT_FALLBACK,
 )
-from config import MIROFISH_API_URL
+from config import MIROFISH_API_URL, LAVA_API_KEY, ENSEMBLE_PROVIDERS, ENSEMBLE_MIN_VOTES
+from ensemble import query_providers, aggregate_votes
 
 # Load .env
 _agent_dir = Path(__file__).parent
@@ -406,6 +407,35 @@ async def _generate_trade_proposal(db: PipelineDB, opp_id: str, report_text: str
         no_token_id=no_token,
     )
 
+    # Multi-provider ensemble via Lava
+    if LAVA_API_KEY and len(ENSEMBLE_PROVIDERS) > 1:
+        results = await query_providers(prompt, ENSEMBLE_PROVIDERS, LAVA_API_KEY)
+        if len(results) >= ENSEMBLE_MIN_VOTES:
+            proposal = aggregate_votes(results)
+            updates = {
+                "status": "trade_proposed",
+                "trade_side": proposal.get("trade_side"),
+                "trade_outcome": proposal.get("trade_outcome"),
+                "trade_token_id": proposal.get("trade_token_id"),
+                "trade_amount_usd": proposal.get("trade_amount_usd"),
+                "trade_reasoning": proposal.get("trade_reasoning"),
+                "simulation_sentiment": proposal.get("simulation_sentiment"),
+                "probability_estimate": proposal.get("probability_estimate", opp.probability_estimate),
+                "estimated_edge": proposal.get("estimated_edge", opp.estimated_edge),
+                "ensemble_agreement": proposal.get("ensemble_agreement"),
+            }
+            db.update_opportunity(opp_id, **updates)
+            db.add_event("trade_proposed", opportunity_id=opp_id, payload={
+                "trade_side": proposal.get("trade_side"),
+                "trade_outcome": proposal.get("trade_outcome"),
+                "trade_amount_usd": proposal.get("trade_amount_usd"),
+                "estimated_edge": proposal.get("estimated_edge"),
+                "ensemble_agreement": proposal.get("ensemble_agreement"),
+                "providers": [r["provider"] for r in results],
+            })
+            return
+
+    # Single-provider fallback
     client = AsyncOpenAI(api_key=API_KEY, base_url=BASE_URL)
     response = await client.chat.completions.create(
         model=MODEL,
