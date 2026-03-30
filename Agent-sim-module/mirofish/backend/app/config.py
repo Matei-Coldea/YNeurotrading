@@ -35,7 +35,7 @@ class Config:
     # Hermes (Nous Research) via OpenRouter — for humanistic persona generation
     HERMES_API_KEY = os.environ.get('HERMES_API_KEY')
     HERMES_BASE_URL = os.environ.get('HERMES_BASE_URL', 'https://openrouter.ai/api/v1')
-    HERMES_MODEL_NAME = os.environ.get('HERMES_MODEL_NAME', 'nousresearch/hermes-3-llama-3.1-70b')
+    HERMES_MODEL_NAME = os.environ.get('HERMES_MODEL_NAME', 'nousresearch/hermes-4-70b')
 
     # K2 reasoning model by MBZUAI — used for report generation & analysis
     K2_API_KEY = os.environ.get('K2_API_KEY', '')
